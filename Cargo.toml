@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "sl_device_rust_wrapper",
+    "editor"
+]
