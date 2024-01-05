@@ -122,7 +122,7 @@ mod ffi {
         fn start_stream(device: Pin<&mut SLDevice>, exp_time_ms: u32) -> i32;
         fn go_unlive(device: Pin<&mut SLDevice>) -> i32;
 
-        fn set_exposure_time(device: Pin<&mut SLDevice>, exp_time_ms: u32) -> i32;
+        //fn set_exposure_time(device: Pin<&mut SLDevice>, exp_time_ms: u32) -> i32;
         
         fn get_image_x_dim(device: Pin<&mut SLDevice>) -> i32;
         fn get_image_y_dim(device: Pin<&mut SLDevice>) -> i32;
@@ -172,6 +172,7 @@ impl SLDevice {
         }
     }
     
+    /*
     pub fn set_exposure_time(&mut self, exp_time_ms: u32) -> Result<(), SLError> {
         let err = SLError::from_i32(ffi::set_exposure_time(self.inner.pin_mut(), exp_time_ms)).unwrap();
         match err {
@@ -179,6 +180,7 @@ impl SLDevice {
             _ => Err(err)
         }
     }
+    */
 
     pub fn get_image_x_dim(&mut self) -> Result<u32, SLError> {
         ffi::get_image_x_dim(self.inner.pin_mut())

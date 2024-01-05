@@ -1,6 +1,12 @@
 [workspace]
 
 members = [
+    "capture",
+    "editor",
+    "frontend/src-tauri",
     "sl_device_rust_wrapper",
-    "editor"
 ]
+
+[patch.crates-io]
+#tauri = {path = "A:/tauri-apps/tauri-v2/core/tauri"}
+tauri = {git="https://github.com/tauri-apps/tauri", branch="raw-display-handle"}

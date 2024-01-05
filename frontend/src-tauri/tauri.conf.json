@@ -31,7 +31,8 @@
         "resizable": true,
         "title": "cview",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "transparent": true
       }
     ]
   },

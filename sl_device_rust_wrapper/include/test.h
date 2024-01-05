@@ -13,7 +13,7 @@ int close_camera(SLDevice& device);
 int start_stream(SLDevice& device, int exp_time_ms);
 int go_unlive(SLDevice& device);
 
-int set_exposure_time(SLDevice& device, int exp_time_ms);
+//int set_exposure_time(SLDevice& device, int exp_time_ms);
 
 int get_image_x_dim(SLDevice& device);
 int get_image_y_dim(SLDevice& device);
