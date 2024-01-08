@@ -24,7 +24,9 @@ serde_json = "1.0"
 vello = { git = "https://github.com/linebender/vello.git" }
 wgpu = "0.18.0"
 pollster = "0.3.0"
-specta = "1.0.5"
+specta = { workspace = true }
+tauri-specta = { workspace = true }
+editor = { path="../../editor" }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

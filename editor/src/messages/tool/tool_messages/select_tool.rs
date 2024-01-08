@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use crate::messages::tool::utility_types::ToolActionHandlerData;
+
 use super::tool_prelude::*;
 
+#[derive(Default)]
 pub struct SelectTool {
     fsm_state: SelectToolFsmState,
     tool_data: SelectToolData
@@ -17,12 +20,21 @@ pub enum SelectToolMessage {
     DragStop
 }
 
+impl MessageHandler<ToolMessage, &mut ToolActionHandlerData> for SelectTool {
+    fn process_message(&mut self, message: ToolMessage, responses: &mut VecDeque<Message>, data: &mut ToolActionHandlerData) {
+        
+    }
+}
+
+#[derive(Default, Debug)]
 enum SelectToolFsmState {
+    #[default]
     Ready,
     Dragging,
     DrawingBox,
 }
 
+#[derive(Default)]
 struct SelectToolData {
     
 }

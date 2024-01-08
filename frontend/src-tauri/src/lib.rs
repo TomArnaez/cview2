@@ -1,3 +1,5 @@
+use editor::application::Editor;
+
 use std::sync::Mutex;
 
 use tauri::{Manager, RunEvent, WindowEvent, Window};
@@ -9,29 +11,20 @@ use vello::*;
 use specta::{ts, Type};
 use serde::{Deserialize, Serialize};
 
-use vello::*;struct RenderState {
+mod commands;
+
+pub static EDITOR: Mutex<Option<Editor>> = Mutex::new(None);
+
+use vello::*;
+
+struct RenderState {
     surface: RenderSurface,
+    renderer: Renderer,
     window: Window,
 }
 
-#[derive(Serialize, Type)]
-enum ToolMessage {
-    Line,
-    Brush
-}
-#[derive(Serialize, Type)]
-enum DebugMessage {
-    Info,
-    Error
-}
-
-#[derive(Serialize, Type)]
-enum Message {
-    ToolMessage(ToolMessage),
-    DebugMessage(DebugMessage),
-}
-
 fn funky_paths(sb: &mut SceneBuilder) {
+
     use PathEl::*;
     let missing_movetos = [
         MoveTo((0., 0.).into()),
@@ -41,7 +34,7 @@ fn funky_paths(sb: &mut SceneBuilder) {
         LineTo((0.0, 400.0).into()),
         LineTo((100.0, 400.0).into()),
     ];
-    let only_movetos = [MoveTo((0.0, 0.0).into()), MoveTo((100.0, 100.0).into())];
+    //let only_movetos = [MoveTo((0.0, 0.0).into()), MoveTo((100.0, 100.0).into())];
     let empty: [PathEl; 0] = [];
     sb.fill(
         Fill::NonZero,
@@ -50,6 +43,7 @@ fn funky_paths(sb: &mut SceneBuilder) {
         None,
         &missing_movetos,
     );
+    /*
     sb.fill(
         Fill::NonZero,
         Affine::IDENTITY,
@@ -67,17 +61,37 @@ fn funky_paths(sb: &mut SceneBuilder) {
     sb.stroke(
         &Stroke::new(8.0),
         Affine::translate((100.0, 100.0)),
-        Color::rgb8(0, 255, 255),
+        Color::rgb8(255, 0, 0),
         None,
         &missing_movetos,
     );
+    */
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    println!("{:?}", ts::export::<Message>(&Default::default()).unwrap());
+    println!("Starting frontend...");
 
+    *(EDITOR.lock().unwrap()) = Some(Editor::new());
+
+    let specta_builder = {
+        use commands::*;
+
+        let specta_builder = tauri_specta::ts::builder()
+            .commands(tauri_specta::collect_commands![
+                init_after_frontend_ready, 
+                on_mouse_move, 
+                on_wheel_scroll,
+                activate_tool]);
+
+
+        #[cfg(debug_assertions)] // <- Only export on non-release builds
+        let specta_builder = specta_builder.path("../src/bindings.ts");
+
+        specta_builder.into_plugin()
+    };
     tauri::Builder::default()
+    .plugin(specta_builder)
     .plugin(tauri_plugin_shell::init())
     .setup(|app| {
             let window = app.get_window("main").unwrap();
@@ -88,8 +102,17 @@ pub fn run() {
             let surface_future = render_cx.create_surface(&window, size.width, size.height);
             let surface: RenderSurface = pollster::block_on(surface_future).expect("Error creating surface");
 
+            let renderer = Renderer::new(&render_cx.devices[0].device,
+            RendererOptions {
+                surface_format: Some(surface.format),
+                use_cpu: false,
+                antialiasing_support: vello::AaSupport::all(),
+            }).unwrap();
+
+
             let render_state = RenderState {
                 window,
+                renderer,
                 surface
             };
 
@@ -116,7 +139,7 @@ pub fn run() {
             }
             RunEvent::MainEventsCleared => {
                 let render_state_mutex = app_handle.state::<Mutex<RenderState>>();
-                let render_state = render_state_mutex.lock().unwrap();
+                let mut render_state = render_state_mutex.lock().unwrap();
 
                 let render_cx_mutex = app_handle.state::<Mutex<RenderContext>>();
                 let render_cx = render_cx_mutex.lock().unwrap();
@@ -125,13 +148,6 @@ pub fn run() {
 
                 let mut scene = Scene::new();
                 let mut builder = SceneBuilder::for_scene(&mut scene);
-
-                let mut renderer = Renderer::new(&render_cx.devices[0].device,
-                RendererOptions {
-                    surface_format: Some(render_state.surface.format),
-                    use_cpu: false,
-                    antialiasing_support: vello::AaSupport::all(),
-                }).unwrap();
 
                 funky_paths(&mut builder);
 
@@ -146,7 +162,7 @@ pub fn run() {
 
                 let scene_complexity = vello::block_on_wgpu(
                     &device_handle.device,
-                    renderer
+                    render_state.renderer
                         .render_to_surface_async(
                             &device_handle.device,
                             &device_handle.queue,

@@ -9,11 +9,10 @@ export function createInputManager(): void {
     const listeners: { target: EventListenerTarget, eventName: EventName; action: (event: any) => void; }[] = [
         { target: window, eventName: "resize", action: () => onWindowResize(window.document.body)},
         { target: window, eventName: "wheel", action: (e: WheelEvent) => onWheelScroll(e)},
-        { target: window, eventName: "contextmenu", action(e: MouseEvent) => onContextMenu(e) },
+        { target: window, eventName: "contextmenu", action: (e: MouseEvent) => onContextMenu(e) },
     ]
 
     // Window events
-
     function onWindowResize(container: HTMLElement) {
 
     }

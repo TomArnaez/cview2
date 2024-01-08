@@ -4,6 +4,8 @@ use futures_core::stream::Stream;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 
+mod detector_controller;
+
 enum StreamMessage {
     StreamProgress(StreamProgress),
     StreamError,
@@ -26,18 +28,5 @@ impl Capture for TestCapture {
         stream! {
             yield StreamMessage::StreamError;
         }
-    }
-}
-
-
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn it_works() {
-
     }
 }

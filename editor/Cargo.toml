@@ -10,4 +10,5 @@ bitflags = { version = "2.4.1", features = ["serde"] }
 log = "0.4.20"
 nalgebra = { version = "0.32.3", features = ["serde-serialize"] }
 serde = { version = "1.0.194", features = ["derive"] }
-specta = "1.0.5"
+specta = { workspace = true }
+tauri-specta = { workspace = true }

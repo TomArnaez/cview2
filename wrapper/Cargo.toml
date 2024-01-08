@@ -1,10 +1,10 @@
 [package]
-name = "SLDeviceRustWrapper"
+name = "wrapper"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "sl_device_rust_wrapper"
+name = "wrapper"
 
 [dependencies]
 cxx = "1.0.111"

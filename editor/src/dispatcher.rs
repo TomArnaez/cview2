@@ -4,6 +4,7 @@ use log::info;
 #[derive(Debug, Default)]
 pub struct Dispatcher {
     message_queues: Vec<VecDeque<Message>>,
+    pub responses: Vec<FrontendMessage>,
     pub message_handlers: DispatcherMessageHandlers,
 }
 
@@ -28,7 +29,7 @@ impl Dispatcher {
 
             match message {
                 Message::Debug(message) => {
-                    self.message_handlers.debug_message_handler.process_message(message, &mut queue, ());
+                    //self.message_handlers.debug_message_handler.process_message(message, &mut queue, ());
                 },
                 Message::Tool(message) => {
                 }

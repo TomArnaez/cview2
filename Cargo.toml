@@ -4,8 +4,12 @@ members = [
     "capture",
     "editor",
     "frontend/src-tauri",
-    "sl_device_rust_wrapper",
+    "wrapper",
 ]
+
+[workspace.dependencies]
+specta = { path = "C:/dev/repos/specta" }
+tauri-specta = { path = "C:/dev/repos/tauri-specta", features = ["typescript", "javascript"] }
 
 [patch.crates-io]
 #tauri = {path = "A:/tauri-apps/tauri-v2/core/tauri"}
