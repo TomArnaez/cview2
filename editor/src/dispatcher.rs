@@ -1,4 +1,4 @@
-use crate::{messages::{prelude::*, debug::utility_types::MessageLoggingVerbosity}, utility_traits::MessageHandler};
+use crate::{messages::{prelude::*,}, utility_traits::MessageHandler};
 use log::info;
 
 #[derive(Debug, Default)]
@@ -10,7 +10,6 @@ pub struct Dispatcher {
 
 #[derive(Debug, Default)]
 pub struct DispatcherMessageHandlers  {
-    debug_message_handler: DebugMessageHandler,
     tool_message_handler: ToolMessageHandler,
 }
 
@@ -23,14 +22,11 @@ impl Dispatcher {
         self.message_queues.push(VecDeque::from_iter([message.into()]));
 
         while let Some(message) = self.message_queues.last_mut().and_then(VecDeque::pop_front) {
-			self.log_message(&message, &self.message_queues, self.message_handlers.debug_message_handler.message_logging_verbosity);
 
             let mut queue = VecDeque::new();
 
             match message {
-                Message::Debug(message) => {
-                    //self.message_handlers.debug_message_handler.process_message(message, &mut queue, ());
-                },
+
                 Message::Tool(message) => {
                 }
             }
@@ -41,6 +37,7 @@ impl Dispatcher {
         }
     }
 
+    /*
     pub fn log_message(&self, message: &Message, queries: &[VecDeque<Message>], message_logging_verbosity: MessageLoggingVerbosity) {
         match message_logging_verbosity {
             MessageLoggingVerbosity::Off => {},
@@ -52,4 +49,5 @@ impl Dispatcher {
             }
         }
     }
+    */
 }

@@ -1,6 +1,12 @@
 # Created by https://www.toptal.com/developers/gitignore/api/rust,react
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust,react
 
+### SDK ###
+**/EIOUSB_LogFile.txt
+**/XDTUSB_LogFile.txt
+**/SLSDK_USB_log.txt
+**/SLSDK_EIO_log.txt
+
 ### react ###
 .DS_*
 *.log

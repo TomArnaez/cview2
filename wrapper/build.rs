@@ -14,9 +14,13 @@ fn main() {
     println!("cargo:rustc-link-lib=SLImage");
     println!("cargo:rustc-link-lib=SLDeviceLib");
     println!("cargo:rustc-link-lib=libtiff");
+    println!("cargo:rustc-link-lib=libxdtusb");
+    println!("cargo:rustc-link-lib=XCLIBW64");
+    println!("cargo:rustc-link-lib=zlib");
+
 
     cxx_build::bridge("src/lib.rs")
-    .file("src/test.cc")
+    .file("src/wrapper.cc")
     .includes(include_paths)
     .compile("cxx-demo");
 }
