@@ -5,6 +5,7 @@ use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 
 mod detector_controller;
+mod image_handler;
 
 enum StreamMessage {
     StreamProgress(StreamProgress),

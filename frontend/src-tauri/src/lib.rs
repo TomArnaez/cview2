@@ -16,6 +16,8 @@ mod commands;
 pub static EDITOR: Mutex<Option<Editor>> = Mutex::new(None);
 
 use vello::*;
+use PathEl::*;
+
 
 struct RenderState {
     surface: RenderSurface,
@@ -23,49 +25,31 @@ struct RenderState {
     window: Window,
 }
 
-fn funky_paths(sb: &mut SceneBuilder) {
+trait Drawable {
+    fn draw(&self, sb: &mut SceneBuilder);
+}
 
-    use PathEl::*;
-    let missing_movetos = [
-        MoveTo((0., 0.).into()),
-        LineTo((100.0, 100.0).into()),
-        LineTo((100.0, 200.0).into()),
-        ClosePath,
-        LineTo((0.0, 400.0).into()),
-        LineTo((100.0, 400.0).into()),
-    ];
-    //let only_movetos = [MoveTo((0.0, 0.0).into()), MoveTo((100.0, 100.0).into())];
-    let empty: [PathEl; 0] = [];
-    sb.fill(
-        Fill::NonZero,
-        Affine::translate((100.0, 100.0)),
-        Color::rgb8(0, 0, 255),
-        None,
-        &missing_movetos,
-    );
-    /*
-    sb.fill(
-        Fill::NonZero,
-        Affine::IDENTITY,
-        Color::rgb8(0, 0, 255),
-        None,
-        &empty,
-    );
-    sb.fill(
-        Fill::NonZero,
-        Affine::IDENTITY,
-        Color::rgb8(0, 0, 255),
-        None,
-        &only_movetos,
-    );
-    sb.stroke(
-        &Stroke::new(8.0),
-        Affine::translate((100.0, 100.0)),
-        Color::rgb8(255, 0, 0),
-        None,
-        &missing_movetos,
-    );
-    */
+struct Rectangle {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64
+}
+
+impl Drawable for Rectangle {
+    fn draw(&self, sb: &mut SceneBuilder) {
+        println!("draw rectangle");
+        let rect = Rect::from_origin_size(Point::new(self.x, self.y), (self.width, self.height));
+
+
+        sb.fill(
+            Fill::NonZero,
+            Affine::translate((100.0, 100.0)),
+            Color::rgb8(255, 0, 0),
+            None,
+            &rect,
+        );
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -138,6 +122,7 @@ pub fn run() {
 
             }
             RunEvent::MainEventsCleared => {
+                /*
                 let render_state_mutex = app_handle.state::<Mutex<RenderState>>();
                 let mut render_state = render_state_mutex.lock().unwrap();
 
@@ -149,7 +134,9 @@ pub fn run() {
                 let mut scene = Scene::new();
                 let mut builder = SceneBuilder::for_scene(&mut scene);
 
-                funky_paths(&mut builder);
+                let rectangle = Rectangle { x: 0., y: 0., width: 100., height:100. };
+
+                rectangle.draw(&mut builder);
 
                 let surface_texture = render_state.surface.surface.get_current_texture().expect("Failed to get surface texture");
 
@@ -177,6 +164,7 @@ pub fn run() {
 
                 surface_texture.present();
                 device_handle.device.poll(wgpu::Maintain::Poll);
+                */
             }
             _ => {}
         }}

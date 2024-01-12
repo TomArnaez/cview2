@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+
+    :root {
+        --primary: hsl(0, 0%, 100%);
+        --secondary: hsl(252, 2%, 51%);
+        --text: hsl(0, 0%, 100%);
+        --textSecondary: hsl(0, 0%, 70%); 
+        --accent: hsl(210, 100%, 56%); 
+        --border: hsl(210, 10%, 32%);
+        --shadow: hsl(210, 20%, 8%);
+    }
+}
