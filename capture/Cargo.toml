@@ -1,5 +1,5 @@
 [package]
-name = "cargo"
+name = "capture"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,4 +11,5 @@ futures = "0.3.30"
 futures-core = "0.3.30"
 futures-util = "0.3.30"
 tokio = { version = "1.35.1", features = ["macros", "rt"] }
+serde = { version = "1.0.194", features = ["derive"] }
 wrapper = { path = "../wrapper" }

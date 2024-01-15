@@ -9,6 +9,7 @@ name = "wrapper"
 [dependencies]
 cxx = "1.0.111"
 thiserror = "1.0.51"
+serde = { version = "1.0.194", features = ["derive"] }
 
 [build-dependencies]
 cxx-build = "1.0.111"

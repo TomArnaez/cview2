@@ -153,7 +153,7 @@ pub mod ffi {
 		S2I_GIGE
     }
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, Deserialize)]
     struct ROIinfo {
         X: i32,
         Y: i32,

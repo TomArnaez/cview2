@@ -69,11 +69,17 @@ impl ToolFsmState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Default, Type)]
 pub enum ToolType {
     #[default]
-    Select
+    Select,
+
+    // Vector tool group
+    Line,
+    Rectangle,
+    Ellipse,
 }
 
 fn list_tool_in_groups() -> Vec<Box<Tool>> {
     vec![
-        Box::<select_tool::SelectTool>::default()
+        Box::<select_tool::SelectTool>::default(),
+        Box::<
     ]
 }

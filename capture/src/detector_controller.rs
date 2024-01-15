@@ -7,14 +7,15 @@ use std::time::Instant;
 use std::{thread, time::Duration};
 
 use async_stream::stream;
-use futures_core::stream::BoxStream;
+use futures_core::Stream;
+use serde::Deserialize;
 use wrapper::ffi::{ExposureModes, ROIinfo, DeviceInterface, BinningModes};
 use wrapper::{SLDevice, SLError, SLImage, ffi};
 
 const HEARTBEAT_PERIOD_MILLIS: u64 = 500;
 
 pub enum DetectorEvent {
-    EstablishedConnection,
+    EstablishedConnection(DetectorInfo),
     LostConnection,
 }
 
@@ -32,7 +33,7 @@ struct DetectorInfo {
     interface: DeviceInterface,
 }
 
-struct DetectorControllerInner {
+pub struct DetectorControllerInner {
     detector: SLDevice,
     detector_status: DetectorStatus,
     heartbeat_period: Duration,
@@ -40,11 +41,11 @@ struct DetectorControllerInner {
     event_tx: Sender<DetectorEvent>
 }
 
-// Your controller struct
 pub struct DetectorController {
     inner: Arc<Mutex<DetectorControllerInner>>,
     heartbeat_handle: thread::JoinHandle<()>,
 }
+
 impl DetectorController {
     pub fn new() -> (DetectorController, mpsc::Receiver<DetectorEvent>) {
         let (tx, rx) = mpsc::channel();
@@ -82,39 +83,49 @@ impl DetectorController {
     }
 
     fn heartbeat(rx: mpsc::Sender<DetectorEvent>, inner: Arc<Mutex<DetectorControllerInner>>) {
-        inner.lock().unwrap().detector.open_camera();
-        // loop {
-        //     {
-        //         let mut inner_locked = inner.lock().unwrap();
-        //         if inner_locked.detector_status == DetectorStatus::Disconnected {
-        //             if let Ok(_) = inner_locked.detector.open_camera() {
-        //                 rx.send(DetectorEvent::EstablishedConnection);
-        //                 inner_locked.detector_info = Some(DetectorInfo {
-        //                     x_dim: inner_locked.detector.get_image_x_dim().unwrap(),
-        //                     y_dim: inner_locked.detector.get_image_y_dim().unwrap(),
-        //                     interface: DeviceInterface::EIO_USB
-        //                 });
+        loop {
+            {
+                let mut inner_locked = inner.lock().unwrap();
+                if inner_locked.detector_status == DetectorStatus::Disconnected {
+                    if let Ok(_) = inner_locked.detector.open_camera() {
+                        let detector_info = DetectorInfo {
+                            x_dim: inner_locked.detector.get_image_x_dim().unwrap(),
+                            y_dim: inner_locked.detector.get_image_y_dim().unwrap(),
+                            interface: DeviceInterface::EIO_USB
+                        };
 
-        //                 inner_locked.detector_status = DetectorStatus::Idle
-        //             } else {
-        //                 println!("Failed to connect");
-        //             }
-        //         } else {
-        //             if !inner_locked.detector.is_connected() {
-        //                 rx.send(DetectorEvent::LostConnection);
-        //                 inner_locked.detector_status = DetectorStatus::Disconnected;
-        //             }
-        //             println!("We're connected!");
-        //         }
+                        rx.send(DetectorEvent::EstablishedConnection(detector_info));
 
-        //         thread::sleep(inner_locked.heartbeat_period);
-        //     }
+                        inner_locked.detector_info = Some(detector_info);
+                        inner_locked.detector_status = DetectorStatus::Idle
+                    } else {
+                        println!("Failed to connect");
+                    }
+                } else {
+                    if !inner_locked.detector.is_connected() {
+                        rx.send(DetectorEvent::LostConnection);
+                        
+                        inner_locked.detector_status = DetectorStatus::Disconnected;
+                        inner_locked.detector_info = None;
+                    }
+                    println!("We're connected!");
+                }
 
-        // }
+                thread::sleep(inner_locked.heartbeat_period);
+            }
+
+        }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+pub enum CaptureMode {
+    SequenceCapture(SequenceCapture),
+    MultiCapture(MultiCapture),
+    StreamCapture(StreamCapture)
+}
+
+#[derive(Debug, Copy, Clone, Deserialize)]
 struct CaptureSettings {
     exposure_time: Duration,
     roi: Option<ROIinfo>,
@@ -162,20 +173,20 @@ impl CaptureSettingsBuilder {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct SequenceCapture {
+#[derive(Debug, Copy, Clone, Deserialize)]
+pub struct SequenceCapture {
     capture_settings: CaptureSettings,
     frame_count: u32,
 }
 
-#[derive(Debug, Clone)]
-struct MultiCapture {
+#[derive(Debug, Clone, Deserialize)]
+pub struct MultiCapture {
     exposure_times: Vec<Duration>,
     frame_count: u32
 }
 
-#[derive(Debug, Clone)]
-struct StreamCapture {
+#[derive(Debug, Clone, Deserialize)]
+pub struct StreamCapture {
     capture_settings: CaptureSettings,
     duration: Duration,
 }
@@ -243,7 +254,7 @@ trait Capture {
     fn capture(&self, detector: Arc<Mutex<DetectorControllerInner>>) -> Result<Self::Output, SLError>;
 }
 
-trait CaptureHandle {
+pub trait CaptureHandle {
     fn cancel(&mut self);
 }
 
@@ -339,8 +350,6 @@ impl CaptureHandle for SequenceHandle {
     }
 }
 
-use futures::stream::{self, Stream, StreamExt};
-
 impl MultiCaptureHandle {
     fn new(detector_inner: Arc<Mutex<DetectorControllerInner>>, multi_capture_settings: MultiCapture) -> Self {
         let detector_inner_clone = detector_inner.clone();
@@ -382,30 +391,6 @@ struct TriggerHandle {
     detector_inner: Arc<Mutex<DetectorControllerInner>>,
     is_active: Arc<AtomicBool>,
     frame_count: u32,
-}
-
-impl Stream for TriggerHandle {
-    type Item = SLImage;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if !self.is_active.load(std::sync::atomic::Ordering::Relaxed) {
-            return Poll::Ready(None);
-        }
-
-        let detector_inner_clone = Arc::clone(&self.detector_inner);
-        let mut detector_lock = detector_inner_clone.lock().unwrap();
-
-        let mut image = SLImage::new(detector_lock.detector.get_image_x_dim().unwrap(), detector_lock.detector.get_image_y_dim().unwrap());
-
-        if detector_lock.detector.read_buffer(image.get_data_pointer(0), 0, 1000).is_ok() {
-            drop(detector_lock);
-            self.as_mut().get_mut().frame_count += 1;
-            Poll::Ready(Some(SLImage::new(5, 5)))
-        } else {
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
-    }
 }
 
 impl TriggerHandle {

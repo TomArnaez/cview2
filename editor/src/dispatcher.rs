@@ -1,17 +1,35 @@
-use crate::{messages::{prelude::*,}, utility_traits::MessageHandler};
-use log::info;
+use crate::messages::prelude::*;
 
-#[derive(Debug, Default)]
 pub struct Dispatcher {
     message_queues: Vec<VecDeque<Message>>,
     pub responses: Vec<FrontendMessage>,
     pub message_handlers: DispatcherMessageHandlers,
 }
 
-#[derive(Debug, Default)]
+impl Default for Dispatcher {
+    fn default() -> Self {
+        let mut responses = Vec::new();
+        let detector_message_handler = DetectorMessageHandler::new(&mut responses);
+
+
+        let message_handlers = DispatcherMessageHandlers {
+            detector_message_handler,
+            tool_message_handler: ToolMessageHandler::default()
+        };
+
+        Self {
+            responses,
+            message_handlers,
+            message_queues: Vec::new()
+        }
+    }
+}
+
 pub struct DispatcherMessageHandlers  {
+    detector_message_handler: DetectorMessageHandler,
     tool_message_handler: ToolMessageHandler,
 }
+
 
 impl Dispatcher {
     pub fn new() -> Self {
@@ -26,7 +44,9 @@ impl Dispatcher {
             let mut queue = VecDeque::new();
 
             match message {
-
+                Message::Detector(message) => {
+                    self.message_handlers.detector_message_handler.process_message(message, &mut queue, ())
+                },
                 Message::Tool(message) => {
                 }
             }
