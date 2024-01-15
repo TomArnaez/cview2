@@ -16,3 +16,10 @@ impl Default for RectangleToolOptions {
         }
     }
 }
+
+pub enum RectangleOptionsUpdate {
+    LineWeight(f64),
+    StrokeColour(Option<Colour>),
+    StrokeColourType(ToolColourType),
+    WorkingColour(Option<Colour>, Option<Colour>)
+}
