@@ -2,8 +2,8 @@
 
 members = [
     "capture",
-    "editor",
     "frontend/src-tauri",
+    "viewer",
     "wrapper",
 ]
 

@@ -19,9 +19,14 @@ tauri-build = { version = "2.0.0-alpha", features = [] }
 [dependencies]
 tauri = { version = "2.0.0-alpha", features = [] }
 tauri-plugin-shell = "2.0.0-alpha"
+serde = { version = "1.0.194", features = ["derive"] }
 serde_json = "1.0"
+viewer = { path = "../../viewer" }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[patch.crates-io]
+tauri = {git="https://github.com/tauri-apps/tauri", branch="raw-display-handle"}

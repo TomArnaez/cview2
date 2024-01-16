@@ -67,7 +67,6 @@
         "xloctime": "cpp"
     },
     "rust-analyzer.linkedProjects": [
-        ".\\editor\\Cargo.toml"
     ],
     "editor.codeActionsOnSave": {
       "source.fixAll.eslint": "explicit"

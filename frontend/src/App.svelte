@@ -1,9 +1,12 @@
 <script lang="ts">
-    import Slider from "./components/widgets/inputs/Slider.svelte";
-    let sliderValue: number = 50; // Initial value
+  import { onMount } from "svelte";
+  import Viewer from "./components/Viewer.svelte";
+
+  onMount(async () => {
+    commands.init_after_frontend_ready();
+  });
 </script>
 
-<div class="flex h-screen bg-white">
-  <div class="flex-1">
-  </div>
-</div>
+
+
+<Viewer/>
