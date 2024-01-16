@@ -1,5 +1,5 @@
 [package]
-name = "cview"
+name = "frontend"
 version = "0.0.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -10,7 +10,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "cview_lib"
+name = "frontend_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -19,14 +19,7 @@ tauri-build = { version = "2.0.0-alpha", features = [] }
 [dependencies]
 tauri = { version = "2.0.0-alpha", features = [] }
 tauri-plugin-shell = "2.0.0-alpha"
-serde = { version = "1.0.194", features = ["derive"] }
 serde_json = "1.0"
-vello = { git = "https://github.com/linebender/vello.git" }
-wgpu = "0.18.0"
-pollster = "0.3.0"
-specta = { workspace = true }
-tauri-specta = { workspace = true }
-editor = { path="../../editor" }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

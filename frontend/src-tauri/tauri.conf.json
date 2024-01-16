@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "cview",
+    "productName": "frontend",
     "version": "0.0.0"
   },
   "tauri": {
@@ -29,10 +29,9 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "cview",
+        "title": "frontend",
         "width": 800,
-        "height": 600,
-        "transparent": true
+        "height": 600
       }
     ]
   },
