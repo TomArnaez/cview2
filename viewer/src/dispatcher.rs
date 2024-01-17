@@ -49,8 +49,8 @@ impl Dispatcher {
                 Message::Detector(message) => {
                     self.message_handlers.detector_message_handler.process_message(message, &mut queue, ())
                 },
-                Message::Debug(message) => {
-                }
+                // Message::Debug(message) => {
+                // }
                 Message::Tool(message) => {
                 }
             }

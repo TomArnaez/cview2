@@ -5,7 +5,7 @@ pub enum Message {
     NoOp,
     Init,
 
-    Debug(DebugMessage),
+    //Debug(DebugMessage),
     Detector(DetectorMessage),
     Tool(ToolMessage)
 }

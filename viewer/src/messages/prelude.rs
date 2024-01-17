@@ -1,7 +1,6 @@
 pub use crate::utility_traits::{MessageHandler};
 
-pub use crate::messages::debug::{DebugMessage, DebugMessageHandler};
-
+//pub use crate::messages::debug::{DebugMessage, DebugMessageHandler};
 pub use crate::messages::detector::{DetectorMessage, DetectorMessageHandler};
 pub use crate::messages::frontend::FrontendMessage;
 pub use crate::messages::portfolio::image::{ImageMessage, ImageMessageHandler};
