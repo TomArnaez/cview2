@@ -43,7 +43,28 @@ pub enum RectangleToolMessage {
     UpdateOptions(RectangleOptionsUpdate)
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+impl<'a> MessageHandler<ToolMessage, &mut ToolActionHandlerData<'a>> for RectangleTool {
+	fn process_message(&mut self, message: ToolMessage, responses: &mut VecDeque<Message>, tool_data: &mut ToolActionHandlerData<'a>) {
+		let ToolMessage::Rectangle(RectangleToolMessage::UpdateOptions(action)) = message else {
+			self.fsm_state.process_event(message, &mut self.tool_data, tool_data, &self.options, responses, true);
+			return;
+		};
+	}
+}
+
+impl ToolMetadata for RectangleTool {
+	fn icon_name(&self) -> String {
+		"VectorRectangleTool".into()
+	}
+	fn tooltip(&self) -> String {
+		"Rectangle Tool".into()
+	}
+	fn tool_type(&self) -> crate::messages::tool::utility_types::ToolType {
+		ToolType::Rectangle
+	}
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 enum RectangleToolFsmState {
 	#[default]
 	Ready,

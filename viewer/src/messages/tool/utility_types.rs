@@ -1,5 +1,7 @@
 
-use crate::messages::{prelude::*, tool::tool_messages::select_tool};
+use crate::messages::prelude::*;
+use super::tool_messages::*;
+use crate::messages::layout::utility_types::widget_prelude::*;
 
 use std::{collections::HashMap, fmt};
 use serde::{Serialize, Deserialize};
@@ -35,6 +37,28 @@ pub trait Fsm {
 
 	/// Implementing this mandatory trait function lets a specific tool react accordingly (and potentially change its state or internal variables) upon receiving an event to do something.
 	fn transition(self, message: ToolMessage, tool_data: &mut Self::ToolData, transition_data: &mut ToolActionHandlerData, options: &Self::ToolOptions, responses: &mut VecDeque<Message>) -> Self;
+
+    	/// When an event makes the tool change or do something, it is processed here to perform a step (transition) on the tool's finite state machine (FSM).
+	/// This function is called by the specific tool's message handler when the dispatcher routes a message to the active tool.
+	fn process_event(
+		&mut self,
+		message: ToolMessage,
+		tool_data: &mut Self::ToolData,
+		transition_data: &mut ToolActionHandlerData,
+		options: &Self::ToolOptions,
+		responses: &mut VecDeque<Message>,
+		update_cursor_on_transition: bool,
+	) where
+		Self: PartialEq + Sized + Copy,
+	{
+		// Transition the tool
+		let new_state = self.transition(message, tool_data, transition_data, options, responses);
+
+		// Update state
+		if *self != new_state {
+			*self = new_state;
+		}
+	}
 }
 
 pub trait ToolMetadata {
@@ -54,6 +78,31 @@ impl fmt::Debug for ToolData {
     }
 }
 
+impl ToolData {
+    pub fn active_tool_mut(&mut self) -> &mut Box<Tool> {
+        self.tools.get_mut(&self.active_tool_type).expect("The active tool is not initialized")
+    }
+
+    pub fn active_tool(&self) -> &Tool {
+		self.tools.get(&self.active_tool_type).map(|x| x.as_ref()).expect("The active tool is not initialized")
+	}
+}
+
+impl LayoutHolder for ToolData {
+    fn layout(&self) -> Layout {
+        let tool_layout = list_tools().iter().map(|tool| {
+            IconButton::new(tool.icon_name(), 32)
+            .disabled(false)
+            .tooltip(tool.tooltip().clone())
+            .widget_holder()
+        }).collect();
+
+        Layout::WidgetLayout(WidgetLayout {
+            layout: vec![LayoutGroup::Row { widgets: tool_layout}]
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct ToolFsmState {
     pub tool_data: ToolData,
@@ -64,7 +113,7 @@ impl Default for ToolFsmState {
         Self {
             tool_data: ToolData {
                 active_tool_type: ToolType::Select,
-                tools: list_tool_in_groups().into_iter().map(|tool| {
+                tools: list_tools().into_iter().map(|tool| {
                     (tool.tool_type(), tool)
                 }).collect(),
             }
@@ -89,8 +138,9 @@ pub enum ToolType {
     Ellipse,
 }
 
-fn list_tool_in_groups() -> Vec<Box<Tool>> {
+fn list_tools() -> Vec<Box<Tool>> {
     vec![
         Box::<select_tool::SelectTool>::default(),
+        Box::<rectangle_tool::RectangleTool>::default(),
     ]
 }

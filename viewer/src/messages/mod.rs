@@ -1,7 +1,9 @@
 //pub mod debug;
 pub mod detector;
+pub mod dialog;
 pub mod frontend;
 pub mod input_mapper;
+pub mod layout;
 pub mod message;
 pub mod portfolio;
 pub mod prelude;

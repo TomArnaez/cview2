@@ -3,12 +3,13 @@
 members = [
     "capture",
     "frontend/src-tauri",
+    "proc-macros",
     "viewer",
     "wrapper",
 ]
 
 [workspace.dependencies]
-specta = { path = "C:/dev/repos/specta" }
+specta = { path = "C:/dev/repos/specta", features = ["uuid"] }
 tauri-specta = { path = "C:/dev/repos/tauri-specta", features = ["typescript", "javascript"] }
 log = { version = "0.4" }
 

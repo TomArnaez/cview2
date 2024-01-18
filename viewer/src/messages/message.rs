@@ -7,5 +7,8 @@ pub enum Message {
 
     //Debug(DebugMessage),
     Detector(DetectorMessage),
+    Dialog(DialogMessage),
+    Frontend(FrontendMessage),
+    Layout(LayoutMessage),
     Tool(ToolMessage)
 }
