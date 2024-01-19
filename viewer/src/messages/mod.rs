@@ -5,6 +5,7 @@ pub mod frontend;
 pub mod input_mapper;
 pub mod layout;
 pub mod message;
+pub mod menu_bar;
 pub mod portfolio;
 pub mod prelude;
 pub mod tool;

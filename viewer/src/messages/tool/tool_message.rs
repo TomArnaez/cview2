@@ -7,7 +7,7 @@ pub enum ToolMessage {
     
     // SubMessages
     Select(SelectToolMessage),
-    Line,
+    Line(LineToolMessage),
     Rectangle(RectangleToolMessage),
     Ellipse,
 
