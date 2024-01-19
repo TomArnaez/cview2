@@ -14,7 +14,7 @@ impl Default for Dispatcher {
         let message_handlers = DispatcherMessageHandlers {
             detector_message_handler,
             dialog_message_handler: DialogMessageHandler::default(),
-            layout_message_handler: LayoutMessageHandler::default(),
+            // menu_bar_messsage_handler: MenuBarMessageHandler::default(),
             tool_message_handler: ToolMessageHandler::default()
         };
 
@@ -29,7 +29,7 @@ impl Default for Dispatcher {
 pub struct DispatcherMessageHandlers  {
     detector_message_handler: DetectorMessageHandler,
     dialog_message_handler: DialogMessageHandler,
-    layout_message_handler: LayoutMessageHandler,
+    // menu_bar_messsage_handler: MenuBarMessageHandler,
     tool_message_handler: ToolMessageHandler,
 }
 
@@ -49,10 +49,11 @@ impl Dispatcher {
             match message {
                 Message::NoOp => {},
                 Message::Init => {
+                    queue.add(Message::Tool(ToolMessage::InitTools))
                 },
-                Message::Detector(message) => {
-                    self.message_handlers.detector_message_handler.process_message(message, &mut queue, ())
-                },
+                // Message::Detector(message) => {
+                //     self.message_handlers.detector_message_handler.process_message(message, &mut queue, ())
+                // },
                 Message::Dialog(message) => {
                     self.message_handlers.dialog_message_handler.process_message(message, &mut queue, ())
                 },
@@ -61,10 +62,11 @@ impl Dispatcher {
 				}
                 // Message::Debug(message) => {
                 // }
-                Message::Layout(message) => {
-                    self.message_handlers.layout_message_handler.process_message(message, &mut queue, ())
-                }
+                // Message::MenuBar(message) => {
+                //     self.message_handlers.menu_bar_messsage_handler.process_message(message, &mut queue, ())
+                // }
                 Message::Tool(message) => {
+                    self.message_handlers.tool_message_handler.process_message(message, &mut queue, ())
                 }
             }
 

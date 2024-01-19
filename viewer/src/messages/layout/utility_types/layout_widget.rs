@@ -1,4 +1,5 @@
 use super::widgets::button_widgets::*;
+use super::widgets::menu_widgets::MenuLayout;
 use crate::messages::prelude::*;
 
 use serde::{Deserialize, Serialize};
@@ -98,7 +99,7 @@ pub trait DialogLayoutHolder: LayoutHolder {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub enum Layout {
 	WidgetLayout(WidgetLayout),
-	//MenuLayout(MenuLayout),
+	MenuLayout(MenuLayout),
 }
 
 impl Layout {
@@ -115,14 +116,14 @@ impl Layout {
 
 	pub fn iter(&self) -> Box<dyn Iterator<Item = &WidgetHolder> + '_> {
 		match self {
-			//Layout::MenuLayout(menu_layout) => Box::new(menu_layout.iter()),
+			Layout::MenuLayout(menu_layout) => Box::new(menu_layout.iter()),
 			Layout::WidgetLayout(widget_layout) => Box::new(widget_layout.iter()),
 		}
 	}
 
 	pub fn iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut WidgetHolder> + '_> {
 		match self {
-			//Layout::MenuLayout(menu_layout) => Box::new(menu_layout.iter_mut()),
+			Layout::MenuLayout(menu_layout) => Box::new(menu_layout.iter_mut()),
 			Layout::WidgetLayout(widget_layout) => Box::new(widget_layout.iter_mut()),
 		}
 	}
@@ -141,7 +142,7 @@ impl Layout {
 				let widget_path = widget_path.to_vec();
 				widget_diffs.push(WidgetDiff { widget_path, new_value });
 			}
-			//(_, Self::MenuLayout(_)) => panic!("Cannot diff menu layout"),
+			(_, Self::MenuLayout(_)) => panic!("Cannot diff menu layout"),
 		}
 	}
 }

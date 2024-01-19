@@ -2,15 +2,14 @@ use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use std::sync::{mpsc, Mutex, Arc};
-use std::task::{Poll, Context};
-use std::time::Instant;
-use std::{thread, time::Duration};
+use std::time::{Instant, Duration};
+use std::thread;
 
 use async_stream::stream;
 use futures_core::Stream;
-use serde::Deserialize;
-use wrapper::ffi::{ExposureModes, ROIinfo, DeviceInterface, BinningModes};
-use wrapper::{SLDevice, SLError, SLImage, ffi};
+use serde::{Deserialize, Serialize};
+use wrapper::ffi::{ExposureModes, ROIinfo, DeviceInterface};
+use wrapper::{SLDevice, SLError, SLImage};
 
 const HEARTBEAT_PERIOD_MILLIS: u64 = 500;
 
@@ -118,16 +117,17 @@ impl DetectorController {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub enum CaptureMode {
     SequenceCapture(SequenceCapture),
     MultiCapture(MultiCapture),
     StreamCapture(StreamCapture)
 }
 
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 struct CaptureSettings {
     exposure_time: Duration,
+    #[serde(skip)]
     roi: Option<ROIinfo>,
     dds: bool,
 }
@@ -173,19 +173,19 @@ impl CaptureSettingsBuilder {
     }
 }
 
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 pub struct SequenceCapture {
     capture_settings: CaptureSettings,
     frame_count: u32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 pub struct MultiCapture {
     exposure_times: Vec<Duration>,
     frame_count: u32
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 pub struct StreamCapture {
     capture_settings: CaptureSettings,
     duration: Duration,
@@ -216,32 +216,6 @@ struct StreamHandle {
     start_time: Instant,
 }
 
-impl Stream for StreamHandle {
-    type Item = SLImage;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if let Some(duration) = self.duration {
-            if Instant::now().duration_since(self.start_time) > duration {
-                return Poll::Ready(None);
-            }
-        }
-
-        let detector_inner_clone = Arc::clone(&self.detector_inner);
-        let mut detector_lock = detector_inner_clone.lock().unwrap();
-
-        let mut image = SLImage::new(detector_lock.detector.get_image_x_dim().unwrap(), detector_lock.detector.get_image_y_dim().unwrap());
-
-        if detector_lock.detector.read_buffer(image.get_data_pointer(0), 0, 1000).is_ok() {
-            drop(detector_lock);
-            self.as_mut().get_mut().frame_count += 1;
-            Poll::Ready(Some(SLImage::new(5, 5)))
-        } else {
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
-    }
-}
-
 impl CaptureHandle for StreamHandle {
     fn cancel(&mut self) {
         self.is_active.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -250,6 +224,12 @@ impl CaptureHandle for StreamHandle {
 
 trait Capture {
     type Output;
+
+    fn pre_capture_setup(&self, detector: &mut DetectorControllerInner, capture_settings: &CaptureSettings) -> Result<(), SLError> {
+        let detector = &mut detector.detector;
+        detector.set_exposure_time(capture_settings.exposure_time)?;
+        Ok(())
+    }
 
     fn capture(&self, detector: Arc<Mutex<DetectorControllerInner>>) -> Result<Self::Output, SLError>;
 }
@@ -308,30 +288,34 @@ impl Capture for MultiCapture {
 impl SequenceHandle {
     fn new(detector_inner: Arc<Mutex<DetectorControllerInner>>, total_frames: u32) -> Self {
         let is_active = Arc::new(AtomicBool::new(true));
-        
-        let detector_inner_clone = detector_inner.clone();
-        let is_active_clone = Arc::clone(&is_active);
-        let stream = stream! {
-            for i in 0..total_frames {
-                if !is_active_clone.load(std::sync::atomic::Ordering::SeqCst) {
-                    break;
+
+        let stream = 
+        {
+            let detector_inner = detector_inner.clone();
+            let is_active = is_active.clone();
+            stream! {
+                for i in 0..total_frames {
+                    if !is_active.load(std::sync::atomic::Ordering::SeqCst) {
+                        break;
+                    }
+
+                    println!("getting frame {}", i);
+                    let mut image;
+
+                    {
+                        let mut detector = detector_inner.lock().unwrap();
+                        image = SLImage::new(detector.detector.get_image_x_dim().unwrap(), detector.detector.get_image_y_dim().unwrap());
+                        while detector.detector.read_buffer(image.get_data_pointer(0), 0, 0).is_err() {
+                        }
+                    } 
+
+                    yield image;
                 }
 
-                println!("getting frame {}", i);
-                let mut image = SLImage::new(2000, 2000);
-
-                {
-                    let mut detector = detector_inner_clone.lock().unwrap();
-                    while detector.detector.read_buffer(image.get_data_pointer(0), 0, 0).is_err() {
-                    }
-                } 
-
-                yield image;
+                let mut detector = detector_inner.lock().unwrap();
+                detector.detector.go_unlive();
+                detector.detector_status = DetectorStatus::Idle;
             }
-
-            let mut detector = detector_inner_clone.lock().unwrap();
-            detector.detector.go_unlive();
-            detector.detector_status = DetectorStatus::Idle;
         };
 
         SequenceHandle {
@@ -352,16 +336,17 @@ impl CaptureHandle for SequenceHandle {
 
 impl MultiCaptureHandle {
     fn new(detector_inner: Arc<Mutex<DetectorControllerInner>>, multi_capture_settings: MultiCapture) -> Self {
-        let detector_inner_clone = detector_inner.clone();
-
-        let multi_capture_settings_clone = multi_capture_settings.clone();
-
-        let stream = stream! {
-            for exposure_time in multi_capture_settings_clone.exposure_times {
-                let sequence_capture = SequenceCapture { capture_settings: CaptureSettings { dds: false, exposure_time, roi: None}, frame_count: multi_capture_settings_clone.frame_count};
-                let sequence_handle = sequence_capture.capture(detector_inner_clone.clone()).unwrap();
-                for await image in sequence_handle.stream {
-                    yield image;
+        let stream = 
+        { 
+            let detector_inner = detector_inner.clone();
+            let multi_capture_settings = multi_capture_settings.clone();
+            stream! {
+                for exposure_time in multi_capture_settings.exposure_times {
+                    let sequence_capture = SequenceCapture { capture_settings: CaptureSettings { dds: false, exposure_time, roi: None}, frame_count: multi_capture_settings.frame_count};
+                    let sequence_handle = sequence_capture.capture(detector_inner.clone()).unwrap();
+                    for await image in sequence_handle.stream {
+                        yield image;
+                    }
                 }
             }
         };
@@ -410,13 +395,13 @@ impl CaptureHandle for TriggerHandle {
 mod tests {
     use std::time::Duration;
 
-    use futures_util::{pin_mut, StreamExt};
+    use futures_util::StreamExt;
 
-    use crate::detector_controller::{DetectorController, TriggerCapture, StreamCapture, SequenceCapture, CaptureHandle, CaptureSettings, MultiCapture, CaptureSettingsBuilder};
+    use crate::detector_controller::{DetectorController, MultiCapture, CaptureSettingsBuilder};
 
     #[tokio::test]
     async fn it_works() {
-        let (detector_controller, rx) = DetectorController::new();
+        let (detector_controller, _) = DetectorController::new();
 
         std::thread::sleep(Duration::from_secs(2));
 
@@ -424,10 +409,8 @@ mod tests {
         let capture_settings = CaptureSettingsBuilder::new(Duration::from_millis(100)).build();
         let multi = MultiCapture { exposure_times: vec![Duration::from_millis(100), Duration::from_millis(200)], frame_count: 10};
 
-        let seq = SequenceCapture { capture_settings, frame_count: 10};
-
         let mut handle = detector_controller.run_capture(&multi).unwrap();
-        while let Some(image) = handle.stream.next().await {
+        while let Some(_) = handle.stream.next().await {
             println!("got image");
         }
     }

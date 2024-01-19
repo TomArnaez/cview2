@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cxx::{UniquePtr, CxxString};
 
-use ffi::{ROIinfo, DeviceInterface, ModelInfo};
+use ffi::DeviceInterface;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -153,7 +153,7 @@ pub mod ffi {
 		S2I_GIGE
     }
 
-    #[derive(Debug, Copy, Clone, Deserialize)]
+    #[derive(Debug, Copy, Clone)]
     struct ROIinfo {
         X: i32,
         Y: i32,
@@ -308,22 +308,22 @@ impl SLDevice {
     pub fn get_image_x_dim(&mut self) -> Result<u32, SLError> {
         ffi::get_image_x_dim(self.inner.pin_mut())
             .try_into()
-            .map_err(|e| SLError::Unknown)
+            .map_err(|_| SLError::Unknown)
     }
 
     pub fn get_image_y_dim(&mut self) -> Result<u32, SLError> {
         ffi::get_image_y_dim(self.inner.pin_mut())
             .try_into()
-            .map_err(|e| SLError::Unknown)
+            .map_err(|_| SLError::Unknown)
     }
 
-    // pub fn set_roi(&mut self, roi: &ffi::ROIinfo) -> Result<(), SLError> {
+    // pub fn set_roi(&mut self, roi: &mut ffi::ROIinfo) -> Result<(), SLError> {
     //     get_error(ffi::set_roi(self.inner.pin_mut(), roi))
     // }
 
     // pub fn get_roi(&mut self) -> Result<ffi::ROIinfo, SLError> {
-    //     let roi = ffi::ROIinfo { X: 0, Y: 0, W: 0, H: 0};
-    //     match get_error(ffi::set_roi(self.inner.pin_mut(), &roi)) {
+    //     let mut roi = ffi::ROIinfo { X: 0, Y: 0, W: 0, H: 0};
+    //     match get_error(ffi::set_roi(self.inner.pin_mut(), &mut roi)) {
     //         Ok(_) => Ok(roi),
     //         Err(e) => Err(e),
     //     }    
@@ -382,22 +382,4 @@ impl SLImage {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
-    use crate::ffi::ExposureModes;
-
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let mut device = SLDevice::new(DeviceInterface::EIO_USB);
-        let mut err = device.open_camera();
-
-        let model_info = device.get_model_info();
-        println!("{:?}", model_info);
-        err = device.set_exposure_time(100);
-        let b = ExposureModes::seq_mode;
-        device.set_exposure_mode(b);
-        println!("{:?}", err);
-    }
 }

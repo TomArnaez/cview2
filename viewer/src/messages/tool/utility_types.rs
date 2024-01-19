@@ -1,7 +1,7 @@
 
 use crate::messages::prelude::*;
 use super::tool_messages::*;
-use crate::messages::layout::utility_types::widget_prelude::*;
+// use crate::messages::layout::utility_types::widget_prelude::*;
 
 use std::{collections::HashMap, fmt};
 use serde::{Serialize, Deserialize};
@@ -26,8 +26,8 @@ impl<'a> ToolActionHandlerData<'a> {
     }
 }
 
-pub trait ToolCommon: for<'a, 'b> MessageHandler<ToolMessage, &'b mut ToolActionHandlerData<'a>> + ToolMetadata {}
-impl<T> ToolCommon for T where T: for<'a, 'b> MessageHandler<ToolMessage, &'b mut ToolActionHandlerData<'a>> + ToolMetadata {}
+pub trait ToolCommon: for<'a, 'b> MessageHandler<ToolMessage, &'b mut ToolActionHandlerData<'a>> + ToolTransition + ToolMetadata {}
+impl<T> ToolCommon for T where T: for<'a, 'b> MessageHandler<ToolMessage, &'b mut ToolActionHandlerData<'a>> + ToolTransition + ToolMetadata {}
 
 type Tool = dyn ToolCommon + Send + Sync;
 
@@ -38,7 +38,7 @@ pub trait Fsm {
 	/// Implementing this mandatory trait function lets a specific tool react accordingly (and potentially change its state or internal variables) upon receiving an event to do something.
 	fn transition(self, message: ToolMessage, tool_data: &mut Self::ToolData, transition_data: &mut ToolActionHandlerData, options: &Self::ToolOptions, responses: &mut VecDeque<Message>) -> Self;
 
-    	/// When an event makes the tool change or do something, it is processed here to perform a step (transition) on the tool's finite state machine (FSM).
+    /// When an event makes the tool change or do something, it is processed here to perform a step (transition) on the tool's finite state machine (FSM).
 	/// This function is called by the specific tool's message handler when the dispatcher routes a message to the active tool.
 	fn process_event(
 		&mut self,
@@ -61,6 +61,23 @@ pub trait Fsm {
 	}
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct EventToMessageMap {
+    pub tool_abort: Option<ToolMessage>,
+}
+
+pub trait ToolTransition {
+    fn event_to_message_map(&self) -> EventToMessageMap;
+
+    fn activate(&self, respones: &mut VecDeque<Message>) {
+
+    }
+
+    fn deactivate(&self, responses: &mut VecDeque<Message>) {
+
+    }
+}
+
 pub trait ToolMetadata {
     fn icon_name(&self) -> String;
     fn tooltip(&self) -> String;
@@ -78,6 +95,15 @@ impl fmt::Debug for ToolData {
     }
 }
 
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize, specta::Type)]
+pub struct ToolFrontendState {
+    active: bool,
+    disabled: bool,
+    icon: String,
+    tooltip: String,
+}
+
+
 impl ToolData {
     pub fn active_tool_mut(&mut self) -> &mut Box<Tool> {
         self.tools.get_mut(&self.active_tool_type).expect("The active tool is not initialized")
@@ -86,22 +112,33 @@ impl ToolData {
     pub fn active_tool(&self) -> &Tool {
 		self.tools.get(&self.active_tool_type).map(|x| x.as_ref()).expect("The active tool is not initialized")
 	}
-}
 
-impl LayoutHolder for ToolData {
-    fn layout(&self) -> Layout {
-        let tool_layout = list_tools().iter().map(|tool| {
-            IconButton::new(tool.icon_name(), 32)
-            .disabled(false)
-            .tooltip(tool.tooltip().clone())
-            .widget_holder()
-        }).collect();
-
-        Layout::WidgetLayout(WidgetLayout {
-            layout: vec![LayoutGroup::Row { widgets: tool_layout}]
-        })
+    pub fn frontend_display(&self) -> Vec<ToolFrontendState> {
+        list_tools().iter().map(|tool| {
+            ToolFrontendState {
+                active: (self.active_tool_type == tool.tool_type()),
+                disabled: false,
+                icon: tool.icon_name(),
+                tooltip: tool.tooltip()
+            }
+        }).collect()
     }
 }
+
+// impl LayoutHolder for ToolData {
+//     fn layout(&self) -> Layout {
+//         let tool_layout = list_tools().iter().map(|tool| {
+//             IconButton::new(tool.icon_name(), 32)
+//             .disabled(false)
+//             .tooltip(tool.tooltip().clone())
+//             .widget_holder()
+//         }).collect();
+
+//         Layout::WidgetLayout(WidgetLayout {
+//             layout: vec![LayoutGroup::Row { widgets: tool_layout}]
+//         })
+//     }
+// }
 
 #[derive(Debug)]
 pub struct ToolFsmState {
@@ -127,7 +164,7 @@ impl ToolFsmState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Default, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Default, specta::Type)]
 pub enum ToolType {
     #[default]
     Select,

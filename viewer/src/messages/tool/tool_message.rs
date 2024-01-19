@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::messages::prelude::*;
 
 use super::utility_types::ToolType;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub enum ToolMessage {
     
     // SubMessages
@@ -15,4 +17,6 @@ pub enum ToolMessage {
     ActivateTool {
         tool_type: ToolType,
     },
+    
+    InitTools,
 }

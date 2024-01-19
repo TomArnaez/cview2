@@ -10,7 +10,7 @@ pub struct SelectTool {
     tool_data: SelectToolData
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize, specta::Type)]
 pub enum SelectToolMessage {
     // Standard messages
     Abort,
@@ -48,5 +48,13 @@ impl ToolMetadata for SelectTool {
     }
     fn tool_type(&self) -> crate::messages::tool::utility_types::ToolType {
 		ToolType::Select
+	}
+}
+
+impl ToolTransition for SelectTool {
+	fn event_to_message_map(&self) -> EventToMessageMap {
+		EventToMessageMap {
+			tool_abort: Some(ToolMessage::Select(SelectToolMessage::Abort)),
+		}
 	}
 }

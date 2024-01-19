@@ -1,7 +1,6 @@
-use super::tool_prelude::*;
-
 use crate::messages::tool::common_functionality::resize::Resize;
 
+use super::tool_prelude::*;
 
 #[derive(Default)]
 pub struct RectangleTool {
@@ -11,7 +10,7 @@ pub struct RectangleTool {
 }
 
 pub struct RectangleToolOptions {
-    line_weight: f64,
+    line_weight: f32,
     stroke: Colour
 }
 
@@ -59,8 +58,16 @@ impl ToolMetadata for RectangleTool {
 	fn tooltip(&self) -> String {
 		"Rectangle Tool".into()
 	}
-	fn tool_type(&self) -> crate::messages::tool::utility_types::ToolType {
+	fn tool_type(&self) -> ToolType {
 		ToolType::Rectangle
+	}
+}
+
+impl ToolTransition for RectangleTool {
+	fn event_to_message_map(&self) -> EventToMessageMap {
+		EventToMessageMap {
+			tool_abort: Some(ToolMessage::Rectangle(RectangleToolMessage::Abort)),
+		}
 	}
 }
 

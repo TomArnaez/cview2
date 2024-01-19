@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use tauri::AppHandle;
 use tauri_specta::{ts, Event};
 use std::{cell::RefCell, thread};
 use viewer::{application::Viewer, messages::{frontend::FrontendMessage, message::Message}};
@@ -19,8 +19,14 @@ fn dispatch(message: impl Into<Message>) {
 }
 
 #[tauri::command]
-fn init_after_frontend_ready() {
-    dispatch(Message::Init);
+#[specta::specta]
+fn dispatch_message(message: Message) {
+    dispatch(message);
+}
+
+#[tauri::command]
+#[specta::specta]
+fn init(app_handle: AppHandle) {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
@@ -32,7 +38,7 @@ pub fn run() {
     VIEWER.set(Some(viewer));
 
     let specta_builder = {
-        let specta_builder = ts::builder().events(tauri_specta::collect_events![FrontendEvent]);
+        let specta_builder = ts::builder().events(tauri_specta::collect_events![FrontendEvent]).commands(tauri_specta::collect_commands![init, dispatch_message]);
 
         #[cfg(debug_assertions)] // <- Only export on non-release builds
         let specta_builder = specta_builder.path("../src/communication/bindings.ts");
@@ -46,17 +52,12 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            thread::spawn(move || {
-                for recv in rx {
-                    FrontendEvent(recv).emit_all(&handle).unwrap();
-                }
-            });
         
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app_handle, event| {
+        .run(|_, event| {
             match event {
                 _ => {},
             }

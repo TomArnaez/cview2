@@ -1,18 +1,16 @@
-<script lang="ts">
-    import MainPanel from '../../panels/MainPanel.svelte';
-    import { writable } from 'svelte/store';
-    import { type ToolType } from "/src/communication/bindings";
-  
+import { writable } from 'svelte/store';
+import { type ToolType } from "/src/communication/bindings";
+
+export function createToolState() {
     interface ToolState {
-      selectedTool: ToolType;
+      selectedTool: ToolType | null;
     };
   
-    // Assuming 'Rectangle' is a valid ToolType value
     const initialToolState: ToolState = {
-      selectedTool: "Rectangle", // Ensure this is a valid ToolType
+      selectedTool: null
     };
   
-    export const toolStore = writable<ToolState>(initialToolState);
+    const toolStore = writable<ToolState>(initialToolState);
 
     const tools = [
         { name: 'Tool1', icon: '/icons/tool1.svg' },
@@ -32,20 +30,4 @@
         { name: 'Tool15', icon: '/icons/tool15.svg' },
         { name: 'Tool16', icon: '/icons/tool16.svg' }
     ];
-</script>
-  
-<div class="w-64 bg-gray-700 h-full">
-    <MainPanel title="Tools">
-        <div class="grid grid-cols-4 gap-4">
-          {#each tools as tool}
-            <div class="flex flex-col items-center justify-center p-2 border border-gray-200 rounded shadow">
-              <img class="w-12 h-12" src={tool.icon} alt={tool.name} />
-              <span class="mt-2 text-sm">{tool.name}</span>
-            </div>
-          {/each}
-        </div>
-      </MainPanel>
-    <MainPanel title="Image Settings">
-        Content for Panel 1
-    </MainPanel>
-</div>
+}
