@@ -29,7 +29,6 @@ impl Default for Dispatcher {
 pub struct DispatcherMessageHandlers  {
     detector_message_handler: DetectorMessageHandler,
     dialog_message_handler: DialogMessageHandler,
-    // menu_bar_messsage_handler: MenuBarMessageHandler,
     tool_message_handler: ToolMessageHandler,
 }
 
@@ -61,9 +60,6 @@ impl Dispatcher {
                     self.responses.push(message);
 				}
                 // Message::Debug(message) => {
-                // }
-                // Message::MenuBar(message) => {
-                //     self.message_handlers.menu_bar_messsage_handler.process_message(message, &mut queue, ())
                 // }
                 Message::Tool(message) => {
                     self.message_handlers.tool_message_handler.process_message(message, &mut queue, ())

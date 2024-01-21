@@ -5,7 +5,6 @@ use super::tool_messages::*;
 
 use std::{collections::HashMap, fmt};
 use serde::{Serialize, Deserialize};
-use specta::Type;
 
 #[derive(Debug, Default, Copy, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Colour {
