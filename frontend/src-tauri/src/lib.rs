@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
-use tauri_specta::{ts, Event};
-use std::{cell::RefCell, thread};
+use tauri::{AppHandle, Manager};
+use tauri_specta::ts;
+use std::{cell::RefCell};
 use viewer::{application::Viewer, messages::{frontend::FrontendMessage, message::Message}};
 
 thread_local! {
@@ -50,8 +50,7 @@ pub fn run() {
         .plugin(specta_builder)
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let handle = app.handle().clone();
-
+            let window = app.get_window("main").unwrap();
         
             Ok(())
         })

@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use super::image::utility_types::misc::ImageId;
+
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum PortfolioMessage {
-    OpenStack,
-    PrevDocument
+    SelectImage {
+        image_id: ImageId
+    }
 }

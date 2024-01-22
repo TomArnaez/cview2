@@ -1,12 +1,11 @@
 pub use crate::utility_traits::MessageHandler;
 
+// Message, MessageHandler
 pub use crate::messages::dialog::select_detector_dialog::{SelectDetectorDialogMessage, SelectDetectorMessageHandler};
 pub use crate::messages::dialog::{DialogMessage, DialogMessageHandler};
 //pub use crate::messages::debug::{DebugMessage, DebugMessageHandler};
 pub use crate::messages::detector::{DetectorMessage, DetectorMessageHandler};
 pub use crate::messages::frontend::FrontendMessage;
-//pub use crate::messages::menu_bar::{MenuBarMessage, MenuBarMessageHandler};
-//pub use crate::messages::layout::{LayoutMessage, LayoutMessageHandler};
 pub use crate::messages::portfolio::image::{ImageMessage, ImageMessageHandler};
 pub use crate::messages::portfolio::PortfolioMessage;
 pub use crate::messages::tool::{ToolMessage, ToolMessageHandler};
@@ -16,7 +15,10 @@ pub use crate::messages::tool::tool_messages::rectangle_tool::RectangleToolMessa
 
 pub use crate::messages::message::{Message, MessageDiscriminant};
 
-pub use std::collections::VecDeque;
+// Helper
+pub use crate::messages::portfolio::image::utility_types::misc::ImageId;
+
+pub use std::collections::{HashMap, VecDeque};
 
 pub trait Responses {
 	fn add(&mut self, message: impl Into<Message>);

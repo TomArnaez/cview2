@@ -24,6 +24,7 @@ serde_json = "1.0"
 viewer = { path = "../../viewer" }
 specta = { workspace = true }
 tauri-specta = { workspace = true }
+raw-window-handle = "0.6.0"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

@@ -10,9 +10,7 @@ pub struct DetectorMessageHandler {
 
 impl DetectorMessageHandler {
     pub fn new(responses: &mut Vec<FrontendMessage>) -> Self {
-        let (detector_controller, rx
-        
-        ) = DetectorController::new();
+        let (detector_controller, rx) = DetectorController::new();
 
         Self {
             detector_controller,

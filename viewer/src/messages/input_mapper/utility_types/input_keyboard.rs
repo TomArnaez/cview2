@@ -2,8 +2,6 @@ use core::fmt;
 
 use serde::{Serialize, Deserialize};
 
-use crate::messages::prelude::*;
-
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum Key {
