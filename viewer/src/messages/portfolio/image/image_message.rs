@@ -1,4 +1,4 @@
-use super::utility_types::{annotations::{Annotation, AnnotationEnum}, misc::AnnotationId};
+use super::utility_types::{annotations::{Annotation, AnnotationEnum}, misc::{AnnotationId, ImagePosition}};
 
 pub enum ImageMessage {
     AddAnnotation {

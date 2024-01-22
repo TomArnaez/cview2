@@ -15,8 +15,3 @@ impl<'a> Command for AddAnnotationCommand<'a> {
         
     }
 }
-
-pub struct SetValue {
-    pub shape: Box<dyn Shape>,
-    pub value: u32,
-}

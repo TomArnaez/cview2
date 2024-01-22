@@ -7,7 +7,7 @@ pub enum Message {
     NoOp,
     Init,
 
-    //Debug(DebugMessage),
+    // Debug(DebugMessage),
     // Detector(DetectorMessage),
     Dialog(DialogMessage),
     Frontend(FrontendMessage),

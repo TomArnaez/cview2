@@ -1,5 +1,5 @@
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{mpsc, Mutex, Arc};
 use std::time::{Instant, Duration};
@@ -7,6 +7,7 @@ use std::thread;
 
 use async_stream::stream;
 use futures_core::Stream;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use wrapper::ffi::{ExposureModes, ROIinfo, DeviceInterface};
 use wrapper::{SLDevice, SLError, SLImage};
@@ -19,14 +20,13 @@ pub enum DetectorEvent {
 }
 
 #[derive(PartialEq, Debug)]
-enum DetectorStatus {
+pub enum DetectorStatus {
     Disconnected,
     Idle,
-    Capturing
 }
 
 #[derive(Debug, Copy, Clone)]
-struct DetectorInfo {
+pub struct DetectorInfo {
     x_dim: u32,
     y_dim: u32,
     interface: DeviceInterface,
@@ -42,7 +42,8 @@ pub struct DetectorControllerInner {
 
 pub struct DetectorController {
     inner: Arc<Mutex<DetectorControllerInner>>,
-    heartbeat_handle: thread::JoinHandle<()>,
+    heartbeat_handle: Option<thread::JoinHandle<()>>,
+    stop_heartbeat: Arc<AtomicBool>, // Flag to signal the heartbeat thread to stop
 }
 
 impl DetectorController {
@@ -59,13 +60,17 @@ impl DetectorController {
 
         let inner_clone = Arc::clone(&inner);
         
+        let stop_heartbeat = Arc::new(AtomicBool::new(false));
+        let stop_clone = stop_heartbeat.clone();
+
         let heartbeat_handle = thread::spawn(move || {
-            DetectorController::heartbeat(tx, inner_clone)
+            DetectorController::heartbeat(tx, inner_clone, stop_clone)
         });
 
-       let controller =  DetectorController {
+        let controller = DetectorController {
             inner,
-            heartbeat_handle,
+            heartbeat_handle: Some(heartbeat_handle), // Wrap the handle in Some
+            stop_heartbeat,
         };
 
         (controller, rx)
@@ -81,38 +86,42 @@ impl DetectorController {
         Err(SLError::Busy)
     }
 
-    fn heartbeat(rx: mpsc::Sender<DetectorEvent>, inner: Arc<Mutex<DetectorControllerInner>>) {
-        loop {
-            {
-                let mut inner_locked = inner.lock().unwrap();
-                if inner_locked.detector_status == DetectorStatus::Disconnected {
-                    if let Ok(_) = inner_locked.detector.open_camera() {
-                        let detector_info = DetectorInfo {
-                            x_dim: inner_locked.detector.get_image_x_dim().unwrap(),
-                            y_dim: inner_locked.detector.get_image_y_dim().unwrap(),
-                            interface: DeviceInterface::EIO_USB
-                        };
+    fn heartbeat(rx: mpsc::Sender<DetectorEvent>, inner: Arc<Mutex<DetectorControllerInner>>, stop_signal: Arc<AtomicBool>) {
+        while !stop_signal.load(Ordering::SeqCst) {
+            let mut inner_locked = inner.lock().unwrap();
+            if inner_locked.detector_status == DetectorStatus::Disconnected {
+                if let Ok(_) = inner_locked.detector.open_camera() {
+                    let detector_info = DetectorInfo {
+                        x_dim: inner_locked.detector.get_image_x_dim().unwrap(),
+                        y_dim: inner_locked.detector.get_image_y_dim().unwrap(),
+                        interface: DeviceInterface::EIO_USB
+                    };
 
-                        rx.send(DetectorEvent::EstablishedConnection(detector_info));
+                    rx.send(DetectorEvent::EstablishedConnection(detector_info));
 
-                        inner_locked.detector_info = Some(detector_info);
-                        inner_locked.detector_status = DetectorStatus::Idle
-                    } else {
-                        println!("Failed to connect");
-                    }
+                    inner_locked.detector_info = Some(detector_info);
+                    inner_locked.detector_status = DetectorStatus::Idle
                 } else {
-                    if !inner_locked.detector.is_connected() {
-                        rx.send(DetectorEvent::LostConnection);
-                        
-                        inner_locked.detector_status = DetectorStatus::Disconnected;
-                        inner_locked.detector_info = None;
-                    }
-                    println!("We're connected!");
                 }
-
-                thread::sleep(inner_locked.heartbeat_period);
+            } else {
+                if !inner_locked.detector.is_connected() {
+                    rx.send(DetectorEvent::LostConnection);
+                    
+                    inner_locked.detector_status = DetectorStatus::Disconnected;
+                    inner_locked.detector_info = None;
+                }
             }
 
+            thread::sleep(inner_locked.heartbeat_period);
+        }
+    }
+}
+
+impl Drop for DetectorController {
+    fn drop(&mut self) {
+        self.stop_heartbeat.store(true, Ordering::SeqCst);
+        if let Some(heartbeat_handle) = self.heartbeat_handle.take() {
+            heartbeat_handle.join().unwrap();
         }
     }
 }
@@ -130,47 +139,6 @@ struct CaptureSettings {
     #[serde(skip)]
     roi: Option<ROIinfo>,
     dds: bool,
-}
-
-impl CaptureSettings {
-    pub fn builder() -> CaptureSettingsBuilder {
-        CaptureSettingsBuilder::default()
-    }
-}
-
-#[derive(Default)]
-struct CaptureSettingsBuilder {
-    exposure_time: Duration,
-    dds: bool,
-    roi: Option<ROIinfo>,
-}
-
-impl CaptureSettingsBuilder {
-    pub fn new(exposure_time: Duration) -> CaptureSettingsBuilder {
-        CaptureSettingsBuilder {
-            exposure_time,
-            dds: false,
-            roi: None,
-        }
-    }
-
-    pub fn dds(mut self, dds: bool) -> CaptureSettingsBuilder {
-        self.dds =  dds;
-        self
-    }
-
-    pub fn roi(mut self, roi: ROIinfo) -> CaptureSettingsBuilder {
-        self.roi = Some(roi);
-        self
-    }
-
-    pub fn build(self) -> CaptureSettings {
-        CaptureSettings {
-            exposure_time: self.exposure_time,
-            dds: self.dds,
-            roi: self.roi,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
@@ -216,12 +184,6 @@ struct StreamHandle {
     start_time: Instant,
 }
 
-impl CaptureHandle for StreamHandle {
-    fn cancel(&mut self) {
-        self.is_active.store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
 trait Capture {
     type Output;
 
@@ -235,6 +197,7 @@ trait Capture {
 }
 
 pub trait CaptureHandle {
+    fn get_stream(&self) -> &Pin<Box<dyn Stream<Item = SLImage>>>;
     fn cancel(&mut self);
 }
 
@@ -329,6 +292,10 @@ impl SequenceHandle {
 }
 
 impl CaptureHandle for SequenceHandle {
+    fn get_stream(&self) ->&Pin<Box<dyn Stream<Item = SLImage>>> {
+        &self.stream
+    }
+
     fn cancel(&mut self) {
         self.is_active.store(false, std::sync::atomic::Ordering::SeqCst);
     }
@@ -363,6 +330,10 @@ impl MultiCaptureHandle {
 }
 
 impl CaptureHandle for MultiCaptureHandle {
+    fn get_stream(&self) -> &Pin<Box<dyn Stream<Item = SLImage>>> {
+        &self.stream
+    }
+
     fn cancel(&mut self) {
         self.is_active.store(false, std::sync::atomic::Ordering::Relaxed);
     }
@@ -385,19 +356,13 @@ impl TriggerHandle {
     }
 }
 
-impl CaptureHandle for TriggerHandle {
-    fn cancel(&mut self) {
-        self.is_active.store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
     use futures_util::StreamExt;
 
-    use crate::detector_controller::{DetectorController, MultiCapture, CaptureSettingsBuilder};
+    use crate::detector_controller::{DetectorController, MultiCapture};
 
     #[tokio::test]
     async fn it_works() {
@@ -405,11 +370,10 @@ mod tests {
 
         std::thread::sleep(Duration::from_secs(2));
 
-
-        let capture_settings = CaptureSettingsBuilder::new(Duration::from_millis(100)).build();
         let multi = MultiCapture { exposure_times: vec![Duration::from_millis(100), Duration::from_millis(200)], frame_count: 10};
 
         let mut handle = detector_controller.run_capture(&multi).unwrap();
+        let c = &handle.stream;
         while let Some(_) = handle.stream.next().await {
             println!("got image");
         }
