@@ -23,7 +23,7 @@ impl PortfolioMessageHandler {
         self.images.get(&image_id)
     }
 
-    pub fn image_mut(&self, image_id: ImageId) -> Option<&ImageMessageHandler> {
+    pub fn image_mut(&mut self, image_id: ImageId) -> Option<&mut ImageMessageHandler> {
         self.images.get_mut(&image_id)
     }
 
@@ -31,7 +31,7 @@ impl PortfolioMessageHandler {
         self.active_image_id.and_then(|id| self.images.get(&id))
     }
 
-    pub fn active_image_mut(&mut self) -> Option<&ImageMessageHandler> {
+    pub fn active_image_mut(&mut self) -> Option<&mut ImageMessageHandler> {
         self.active_image_id.and_then(|id| self.images.get_mut(&id))
     }
 

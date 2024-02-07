@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use image::{ImageBuffer, Luma};
 use uuid::Uuid;
+use glam::IVec2;
 
 #[derive(Serialize, Deserialize, specta::Type)]
 pub struct Percentage(u32);
@@ -25,10 +25,10 @@ impl Percentage {
 
 #[derive(Serialize, Deserialize, specta::Type)]
 pub struct AdjustmentLevels {
-    min: u32,
-    max: u32,
-    brightness: Percentage,
-    contrast: Percentage
+    pub min: u32,
+    pub max: u32,
+    pub brightness: Percentage,
+    pub contrast: Percentage
 }
 
 pub trait Command {
@@ -36,20 +36,11 @@ pub trait Command {
     fn undo(&self);
 }
 
-#[derive(Serialize, Deserialize, specta::Type)]
-pub struct ImagePosition(pub (u32, u32));
+#[derive(Copy, Clone, Serialize, Deserialize, specta::Type)]
+pub struct ImagePosition(pub IVec2);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, specta::Type)]
 pub struct ImageId(pub Uuid);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, specta::Type)]
 pub struct AnnotationId(pub Uuid);
-
-pub trait ImageType {
-}
-
-impl ImageType for ImageBuffer<Luma<u16>, Vec<u16>> {
-}
-
-impl ImageType for ImageBuffer<Luma<f32>, Vec<f32>> {
-}
