@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cxx::{UniquePtr, CxxString};
 
-use ffi::DeviceInterface;
+use ffi::{DeviceInterface, SLBufferInfo};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -122,6 +122,7 @@ fn get_error(err_code: i32) -> Result<(), SLError> {
 #[cxx::bridge]
 pub mod ffi {
     #[repr(i32)]
+    #[derive(Debug)]
     pub enum ExposureModes {
         seq_mode = 1,
 		fps25_mode,
@@ -159,6 +160,12 @@ pub mod ffi {
         Y: i32,
         W: i32,
         H: i32
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    struct SLBufferInfo {
+        width: i32,
+        height: i32,
     }
 
     #[repr(i32)]
@@ -211,20 +218,20 @@ pub mod ffi {
         type ModelInfo;
         type ModelInterface;
         type BinningModes;
+        type SLBufferInfo;
         
         fn new_sl_device(device_interface: DeviceInterface) -> UniquePtr<SLDevice>;
         fn open_camera(device: Pin<&mut SLDevice>) -> i32;
         fn close_camera(device: Pin<&mut SLDevice>) -> i32;
-        fn start_stream(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
-        fn go_live(device: Pin<&mut SLDevice>) -> i32;
-        fn go_unlive(device: Pin<&mut SLDevice>) -> i32;
+        fn start_stream(device: Pin<&mut SLDevice>) -> i32;
+        fn start_stream_exp_time(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
+        fn stop_stream(device: Pin<&mut SLDevice>) -> i32;
+        fn acquire_image(device: Pin<&mut SLDevice>, buffer: &mut [u16]) -> SLBufferInfo;
         fn software_trigger(device: Pin<&mut SLDevice>) -> i32;
         fn is_connected(device: Pin<&mut SLDevice>) -> bool;
         fn set_exposure_time(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
         fn set_exposure_mode(device: Pin<&mut SLDevice>, exposure_mode: ExposureModes) -> i32;
         fn set_number_of_frames(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
-        unsafe fn read_frame(device: Pin<&mut SLDevice>, data_ptr: *mut u16) -> bool;
-        unsafe fn read_buffer(device: Pin<&mut SLDevice>, data_ptr: *mut u16, buf_num: i32, timeout: i32) -> i32;
         fn get_image_x_dim(device: Pin<&mut SLDevice>) -> i32;
         fn get_image_y_dim(device: Pin<&mut SLDevice>) -> i32;
         // fn set_roi(device: Pin<&mut SLDevice>, roi: &mut ROIinfo) -> i32;
@@ -239,7 +246,7 @@ pub mod ffi {
         unsafe fn offset_correction(in_image: Pin<&mut SLImage>, offset_map: Pin<&mut SLImage>, dark_offset: i32) -> i32;
         unsafe fn gain_correction(in_image: Pin<&mut SLImage>, gain_map: Pin<&mut SLImage>, dark_offset: i32) -> i32;
         unsafe fn kernel_defect_correction(in_image: Pin<&mut SLImage>, defect_map: Pin<&mut SLImage>) -> i32;
-        fn get_data_pointer(image: Pin<&mut SLImage>, frame: i32) -> *mut u16;
+        fn get_data_pointer(image: Pin<&mut SLImage>, frame: i32) -> &mut [u16];
     }
 }
 
@@ -268,29 +275,25 @@ impl SLDevice {
     pub fn close_camera(&mut self) -> Result<(), SLError> {
         get_error(ffi::close_camera(self.inner.pin_mut()))
     }
-
-    pub fn start_stream(&mut self, exposure_time: Duration) -> Result<(), SLError> {
-        get_error(ffi::start_stream(self.inner.pin_mut(), exposure_time.as_millis() as i32))
+    
+    pub fn start_stream(&mut self, exposure_time: Option<Duration>) -> Result<(), SLError> {
+        get_error(
+            match exposure_time {
+                Some(exp_time) => ffi::start_stream_exp_time(self.inner.pin_mut(), exp_time.as_millis() as i32),
+                None => ffi::start_stream(self.inner.pin_mut()),
+        })
+    }
+    
+    pub fn stop_stream(&mut self) -> Result<(), SLError> {
+        get_error(ffi::stop_stream(self.inner.pin_mut()))
     }
 
-    pub fn go_live(&mut self) -> Result<(), SLError> {
-        get_error(ffi::go_live(self.inner.pin_mut()))
-    }
-
-    pub fn go_unlive(&mut self) -> Result<(), SLError> {
-        get_error(ffi::go_unlive(self.inner.pin_mut()))
+    pub fn acquire_image(&mut self, buffer: &mut [u16]) -> SLBufferInfo {
+        ffi::acquire_image(self.inner.pin_mut(), buffer)
     }
 
     pub fn software_trigger(&mut self) -> Result<(), SLError> {
         get_error(ffi::software_trigger(self.inner.pin_mut()))
-    }
-
-    pub fn read_frame(&mut self, data_ptr: *mut u16) -> bool {
-        unsafe { ffi::read_frame(self.inner.pin_mut(), data_ptr) }
-    }
-
-    pub fn read_buffer(&mut self, data_ptr: *mut u16, buf_num: u32, timeout: u32) -> Result<(), SLError> {
-        get_error(unsafe { ffi::read_buffer(self.inner.pin_mut(), data_ptr, buf_num as i32, timeout as i32)})
     }
 
     pub fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError> {

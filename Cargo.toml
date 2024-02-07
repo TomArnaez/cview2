@@ -2,7 +2,6 @@
 
 members = [
     "capture",
-    "frontend/src-tauri",
     "proc-macros",
     "viewer",
     "wrapper",

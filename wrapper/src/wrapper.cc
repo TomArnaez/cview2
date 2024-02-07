@@ -19,28 +19,24 @@ int close_camera(SLDevice& device) {
     return int(device.CloseCamera());
 }
 
+int start_stream(SLDevice& device) {
+  return int(device.StartStream());
+}
+
 int start_stream(SLDevice& device, int exp_time_ms) {
   return int(device.StartStream(exp_time_ms));
 }
 
-int go_live(SLDevice& device) {
-  return int(device.GoLive());
-}
-
-int go_unlive(SLDevice& device) {
-  return int(device.GoUnLive());
+int stop_stream(SLDevice& device) {
+  return int(device.StopStream());
 }
 
 int software_trigger(SLDevice& device) {
   return int(device.SoftwareTrigger());
 }
 
-bool read_frame(SLDevice& device, unsigned short* data_ptr) {
-  return device.ReadFrame(data_ptr);
-}
-
-int read_buffer(SLDevice& device, unsigned short* data_ptr, int bufNum, int timeout) {
-  return int(device.ReadBuffer(data_ptr, bufNum, timeout));
+SLBufferInfo acquire_image(SLDevice& device, rust::Slice<u16> buffer) {
+  return int(device.AcquireImage(buffer.data()));
 }
 
 int set_exposure_time(SLDevice& device, int exp_time_ms) {
@@ -75,7 +71,6 @@ ModelInfo get_model_info(SLDevice& device) {
   return device.GetModelInfo();
 }
 */
-
 
 // SLImage
 
