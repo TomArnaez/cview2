@@ -1,138 +1,48 @@
 use std::time::Duration;
+use cxx::{type_id, Exception, ExternType, UniquePtr};
+use serde::{Deserialize, Serialize};
+pub use sldevice_ffi::{DeviceInterface, ExposureModes, FullWellModes, ROIinfo, SLDeviceInfo, SLError, scan_cameras};
 
-use cxx::{UniquePtr, CxxString};
+const ACQUISITION_TIMEOUT_DEFAULT: u32 = 1000;
 
-use ffi::{DeviceInterface, SLBufferInfo};
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum SLError {
-    #[error("Operation completed successfully")]
-    Success,
-
-    #[error("Invalid parameter")]
-    InvalidParam,
-
-    #[error("No device found")]
-    NoDevice,
-
-    #[error("Item not found")]
-    NotFound,
-
-    #[error("Device or resource busy")]
-    Busy,
-
-    #[error("Operation timed out")]
-    Timeout,
-
-    #[error("Correction error")]
-    Correction,
-
-    #[error("Operation not supported")]
-    NotSupported,
-
-    #[error("Item already exists")]
-    AlreadyExists,
-
-    #[error("Internal error")]
-    Internal,
-
-    #[error("Other error")]
-    Other,
-
-    #[error("Device is closed")]
-    DeviceClosed,
-
-    #[error("Device is currently streaming")]
-    DeviceStreaming,
-
-    #[error("Configuration failed")]
-    ConfigFailed,
-
-    #[error("Configuration file not found")]
-    ConfigFileNotFound,
-
-    #[error("Not enough memory available")]
-    NotEnoughMemory,
-
-    #[error("Overflow error")]
-    Overflow,
-
-    #[error("Pipe error")]
-    Pipe,
-
-    #[error("Operation interrupted")]
-    Interrupted,
-
-    #[error("I/O error")]
-    Io,
-
-    #[error("Access error")]
-    Access,
-
-    #[error("Operation requires administrative privileges")]
-    RequiresAdmin,
-
-    #[error("Critical error occurred")]
-    Critical,
-
-    #[error("Unknown error")]
-    Unknown,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[repr(C)] 
+pub struct SLBufferInfo { 
+    pub error: SLError, 
+    pub width: u32,
+    pub height: u32,
+    pub size: u32, 
+    pub missing_packets: u32, 
+    pub frame_count: u32, 
+    pub block_id: u64, 
+    pub timestamp: u64, 
 }
 
-impl SLError {
-    pub fn from_i32(value: i32) -> Option<Self> {
-        match value {
-            0 => Some(SLError::Success),
-            1 => Some(SLError::InvalidParam),
-            2 => Some(SLError::NoDevice),
-            3 => Some(SLError::NotFound),
-            4 => Some(SLError::Busy),
-            5 => Some(SLError::Timeout),
-            6 => Some(SLError::Correction),
-            7 => Some(SLError::NotSupported),
-            8 => Some(SLError::AlreadyExists),
-            9 => Some(SLError::Internal),
-            10 => Some(SLError::Other),
-            11 => Some(SLError::DeviceClosed),
-            12 => Some(SLError::DeviceStreaming),
-            13 => Some(SLError::ConfigFailed),
-            14 => Some(SLError::ConfigFileNotFound),
-            15 => Some(SLError::NotEnoughMemory),
-            16 => Some(SLError::Overflow),
-            17 => Some(SLError::Pipe),
-            18 => Some(SLError::Interrupted),
-            19 => Some(SLError::Io),
-            20 => Some(SLError::Access),
-            21 => Some(SLError::RequiresAdmin),
-            22 => Some(SLError::Critical),
-            _ => None,
-        }
-    }
+unsafe impl ExternType for SLBufferInfo {
+    type Id = type_id!("SpectrumLogic::SLBufferInfo");
+    type Kind = cxx::kind::Trivial;
 }
 
-fn get_error(err_code: i32) -> Result<(), SLError> {
-    let err = SLError::from_i32(err_code).unwrap();
-    match err {
-        SLError::Success => Ok(()),
-        _ => Err(err)
-    }
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
+#[repr(C)]
+pub struct ROI {
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32
 }
 
-#[cxx::bridge]
-pub mod ffi {
-    #[repr(i32)]
-    #[derive(Debug)]
-    pub enum ExposureModes {
-        seq_mode = 1,
-		fps25_mode,
-		fps30_mode,
-		trig_mode,
-		xfps_mode
-    }
+unsafe impl ExternType for ROI {
+    type Id = type_id!("SpectrumLogic::ROIinfo");
+    type Kind = cxx::kind::Trivial;
+}
 
-    #[repr(i32)]
-    #[derive(Debug)]
+pub struct RegisterAddress(u32);
+
+#[cxx::bridge(namespace = "SpectrumLogic")]
+mod sldevice_ffi {
+    #[derive(Debug, Serialize, Deserialize)]
+    #[repr(u32)]
     pub enum DeviceInterface {
 		CL = 0,
 		USB = 1,
@@ -142,247 +52,320 @@ pub mod ffi {
 		UNKNOWN = 6
     }
 
-    #[repr(i32)]
-    #[derive(Debug)]
-    pub enum ModelInterface {
-		CL,
-		USB,
-		GIGE,
-		CXP,
-		CLF,
-		CLB,
-		S2I_GIGE
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    #[repr(u32)]
+    pub enum ExposureModes {
+        #[rust_name="Unknown"]
+        unknown = 0,
+        #[rust_name="SequenceMode"]
+        seq_mode,
+        #[rust_name="FPS25Mode"]
+        fps25_mode,
+        #[rust_name="FPS30Mode"]
+        fps30_mode,
+        #[rust_name="TriggerMode"]
+        trig_mode,
+        #[rust_name="XFPSMode"]
+        xfps_mode,
     }
 
-    #[derive(Debug, Copy, Clone)]
-    struct ROIinfo {
-        X: i32,
-        Y: i32,
-        W: i32,
-        H: i32
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[repr(u32)]
+    pub enum SLError {
+        SL_ERROR_SUCCESS = 0,
+        SL_ERROR_INVALID_PARAM,
+        SL_ERROR_NO_DEVICE,
+        SL_ERROR_NOT_FOUND,
+        SL_ERROR_BUSY,
+        SL_ERROR_TIMEOUT,
+        SL_ERROR_CORRECTION,
+        SL_ERROR_NOT_SUPPORTED,
+        SL_ERROR_ALREADY_EXISTS,
+        SL_ERROR_INTERNAL,
+        SL_ERROR_OTHER,
+        SL_ERROR_DEVICE_CLOSED,
+        SL_ERROR_DEVICE_STREAMING,
+        SL_ERROR_CONFIG_FAILED,
+        SL_ERROR_CONFIG_FILE_NOT_FOUND,
+        SL_ERROR_NOT_ENOUGH_MEMORY,
+        SL_ERROR_OVERFLOW,
+        SL_ERROR_PIPE,
+        SL_ERROR_INTERRUPTED,
+        SL_ERROR_IO,
+        SL_ERROR_ACCESS,
+        SL_ERROR_REQUIRES_ADMIN,
+        SL_ERROR_CRITICAL,
+        SL_ERROR_NOT_INIT,
+        SL_ERROR_NOT_FILLED,
+        SL_ERROR_ABORTED,
+        SL_ERROR_RESENDS,
+        SL_ERROR_MISSING_PACKETS,
+        SL_ERROR_READ_FAILED,
+        SL_ERROR_WRITE_FAILED,
     }
 
-    #[derive(Debug, Copy, Clone)]
-    struct SLBufferInfo {
-        width: i32,
-        height: i32,
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[repr(u32)]
+    pub enum FullWellModes {
+        Low = 0,
+        High = 2,
+        Unknown = 3
     }
-
-    #[repr(i32)]
-    #[derive(Debug, Copy, Clone)]
-    pub enum BinningModes
-	{
-		x11 = 1,
-		x22 = 2,
-		x44 = 3,
-		BinningUnknown = 4,
-	}
-
-    /*
-    pub struct SLDeviceInfo<'a> {
-        interface: DeviceInterface,
-        detector_ip_addresss: &'a CxxString,
-        ip: &'a CxxString,
-        int: i32,
-        params: &'a CxxString,
-        force_ip: &'a CxxString,
-        log_file_path: &'a CxxString
+    
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cxx_name="SLDeviceInfoRS"]
+    pub struct SLDeviceInfo {
+        pub device_interface: DeviceInterface,
+        pub detector_ip_address: String,
+        pub id: String,
+        pub unit: u32,
+        params: String,
+        force_ip: String,
+        log_file_path: String,
     }
-
-
-    #[derive(Debug)]
-    pub struct ModelInfo<'a> {
-        set: bool,
-        code: &'a CxxString,
-        full_code: &'a CxxString,
-        type_name: &'a CxxString,    
-        hash: &'a CxxString,
-        model: &'a CxxString,
-        configuration: &'a CxxString,
-        device_width: i32,
-        device_height: i32,
-        num_temperature_sensors: i32,
-        model_interface: ModelInterface,
-        pixel_size: i32
-    }
-    */
-
 
     unsafe extern "C++" {
-        include!("C:\\dev\\repos\\cview2\\wrapper\\include\\wrapper.h");
+        include!("SLDevice.h");
+        include!("wrapper/src/wrapper.h");
 
         type SLDevice;
         type ExposureModes;
         type DeviceInterface;
-        type ROIinfo;
-        type ModelInfo;
-        type ModelInterface;
-        type BinningModes;
-        type SLBufferInfo;
-        
-        fn new_sl_device(device_interface: DeviceInterface) -> UniquePtr<SLDevice>;
-        fn open_camera(device: Pin<&mut SLDevice>) -> i32;
-        fn close_camera(device: Pin<&mut SLDevice>) -> i32;
-        fn start_stream(device: Pin<&mut SLDevice>) -> i32;
-        fn start_stream_exp_time(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
-        fn stop_stream(device: Pin<&mut SLDevice>) -> i32;
-        fn acquire_image(device: Pin<&mut SLDevice>, buffer: &mut [u16]) -> SLBufferInfo;
-        fn software_trigger(device: Pin<&mut SLDevice>) -> i32;
-        fn is_connected(device: Pin<&mut SLDevice>) -> bool;
-        fn set_exposure_time(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
-        fn set_exposure_mode(device: Pin<&mut SLDevice>, exposure_mode: ExposureModes) -> i32;
-        fn set_number_of_frames(device: Pin<&mut SLDevice>, exp_time_ms: i32) -> i32;
-        fn get_image_x_dim(device: Pin<&mut SLDevice>) -> i32;
-        fn get_image_y_dim(device: Pin<&mut SLDevice>) -> i32;
-        // fn set_roi(device: Pin<&mut SLDevice>, roi: &mut ROIinfo) -> i32;
-        // fn get_roi(device: Pin<&mut SLDevice>, roi: &mut ROIinfo) -> i32;
-        //fn get_model_info(device: Pin<&mut SLDevice>) -> ModelInfo;
+        type FullWellModes;
+        type SLError;
+        type SLBufferInfo = crate::SLBufferInfo;
+        type ROIinfo = crate::ROI;
 
-        type SLImage;
+        #[rust_name="constuct_sldevice_with_interface"]
+        #[namespace="SLBindings"]
+        pub fn construct(device_interface: DeviceInterface) -> Result<UniquePtr<SLDevice>>;
+        // #[rust_name="constuct_sldevice_with_devinfo"]
+        // #[namespace="SLBindings"]
+        // pub fn construct(device_info: SLDeviceInfo) -> UniquePtr<SLDevice>;
+        unsafe fn AcquireImage(self: Pin<&mut SLDevice>, buffer: *mut u16, timeout_ms: u32) -> SLBufferInfo;
+        fn SetExposureTime(self: Pin<&mut SLDevice>, exposure_time_ms: i32) -> SLError;
+        fn SetExposureMode(self: Pin<&mut SLDevice>, exposure_mode: ExposureModes) -> SLError;
+        fn IsConnected(self: Pin<&mut SLDevice>) -> bool;
+        fn OpenCamera(self: Pin<&mut SLDevice>, bufferDepth: i32) -> SLError;
+        fn CloseCamera(self: Pin<&mut SLDevice>) -> SLError;
+        fn StartStream(self: Pin<&mut SLDevice>) -> SLError;
+        fn StopStream(self: Pin<&mut SLDevice>) -> SLError;
+        fn GetImageXDim(self: Pin<&mut SLDevice>) -> i32;
+        fn GetImageYDim(self: Pin<&mut SLDevice>) -> i32;
+        fn GetROI(self: Pin<&mut SLDevice>, roi: &mut ROIinfo) -> SLError;
+        fn SetROI(self: Pin<&mut SLDevice>, roi: ROIinfo) -> SLError;
+        fn RegisterWrite(self: Pin<&mut SLDevice>, addr: i32, value: i32, sensor_num: i32) -> SLError;
+        fn RegisterRead(self: Pin<&mut SLDevice>, addr: i32, sensor_num: i32) -> i32;
+        fn SetNumberOfFrames(self: Pin<&mut SLDevice>, num_frames: i32) -> SLError;
+        fn SoftwareTrigger(self: Pin<&mut SLDevice>) -> SLError;
+        fn MeasureTemperature(self: Pin<&mut SLDevice>, temp_out: &mut f32, sensor_num: i32) -> SLError;
+        fn SetTestMode(self: Pin<&mut SLDevice>, test_mode_on: bool) -> SLError;
+        fn SetDDS(self: Pin<&mut SLDevice>, dds_on: bool) -> SLError;
+        fn SetFullWell(self: Pin<&mut SLDevice>, full_well_mode: FullWellModes) -> SLError;
+        #[namespace="SLBindings"]
+        fn get_device_info(device: Pin<&mut SLDevice>) -> SLDeviceInfo;
+        #[namespace="SLBindings"]
+        fn scan_cameras() -> Result<Vec<SLDeviceInfo>>;
+    }
+}
+
+#[cxx::bridge(namespace = "SpectrumLogic")]
+pub mod slimage_ffi {
+    unsafe extern "C++" {
+        include!("SLImage.h");
         
-        fn new_sl_image(width: i32, height: i32) -> UniquePtr<SLImage>;
-        fn read_tiff_image(filename: &CxxString, image: Pin<&mut SLImage>) -> bool;
-        fn write_tiff_image(filename: &CxxString, image: Pin<&mut SLImage>, bits: i32) -> bool;
-        unsafe fn offset_correction(in_image: Pin<&mut SLImage>, offset_map: Pin<&mut SLImage>, dark_offset: i32) -> i32;
-        unsafe fn gain_correction(in_image: Pin<&mut SLImage>, gain_map: Pin<&mut SLImage>, dark_offset: i32) -> i32;
-        unsafe fn kernel_defect_correction(in_image: Pin<&mut SLImage>, defect_map: Pin<&mut SLImage>) -> i32;
-        fn get_data_pointer(image: Pin<&mut SLImage>, frame: i32) -> &mut [u16];
+        type SLImage;
+
+        #[rust_name="constuct_slimage"]
+        #[namespace="SLBindings"]
+        fn construct() -> Result<UniquePtr<SLImage>>;
+        #[rust_name="constuct_slimage_width_height"]
+        #[namespace="SLBindings"]
+        fn construct(width: i32, height: i32) -> Result<UniquePtr<SLImage>>;
+        #[rust_name="constuct_slimage_width_height_depth"]
+        #[namespace="SLBindings"]
+        fn construct(width: i32, height: i32, depth: i32) -> Result<UniquePtr<SLImage>>;
+        fn GetHeight(self: &SLImage) -> i32;
+        fn GetWidth(self: &SLImage) -> i32;
+        fn GetDepth(self: &SLImage) -> i32;
+        unsafe fn GetDataPointer(self: Pin<&mut SLImage>, frame: i32) -> *mut u16;
+       // unsafe fn KernelDefectCorrection(self, in_img: Pin<&mut SLImage>, out_img: Pin<&mut SLImage>, defect_map: *mut SLImage) -> SLError;
+    }
+}
+
+fn slerror_to_result(error_code: SLError) -> Result<(), SLError> {
+    match error_code {
+        SLError::SL_ERROR_SUCCESS => Ok(()),
+        _ => Err(error_code), 
     }
 }
 
 pub struct SLDevice {
-    inner: UniquePtr<ffi::SLDevice>,
+    device: UniquePtr<sldevice_ffi::SLDevice>,
 }
 
-unsafe impl Send for SLDevice {}
-unsafe impl Sync for SLDevice {}
-
 impl SLDevice {
-    pub fn new(interface: DeviceInterface) -> Self {
-        Self {
-            inner: ffi::new_sl_device(interface),
+    pub fn new(interface: DeviceInterface) -> Result<Self, String> {
+        match sldevice_ffi::constuct_sldevice_with_interface(interface) {
+            Ok(device) => {
+                Ok(Self {
+                    device
+                })
+            },
+            Err(exception) => {
+                Err(exception.what().to_string())
+            }
         }
     }
 
-    pub fn is_connected(&mut self) -> bool {
-        ffi::is_connected(self.inner.pin_mut())
+    // pub fn new(device_info: SLDeviceInfo) -> Self {
+    //     Self {
+    //         device: sldevice_ffi::construct_sldevice_with_devinfo(device_info)
+    //     }
+    // }
+
+    pub fn scan_cameras() -> Result<Vec<SLDeviceInfo>, Exception> {
+        sldevice_ffi::scan_cameras()
+    }
+
+    pub fn register_read(&mut self, address: RegisterAddress, sensor_sum: u32) -> i32 {
+        self.device.pin_mut().RegisterRead(address.0 as i32, sensor_sum as i32)
     }
 
     pub fn open_camera(&mut self) -> Result<(), SLError> {
-        get_error(ffi::open_camera(self.inner.pin_mut()))
+        slerror_to_result(self.device.pin_mut().OpenCamera(100))
     }
 
     pub fn close_camera(&mut self) -> Result<(), SLError> {
-        get_error(ffi::close_camera(self.inner.pin_mut()))
-    }
-    
-    pub fn start_stream(&mut self, exposure_time: Option<Duration>) -> Result<(), SLError> {
-        get_error(
-            match exposure_time {
-                Some(exp_time) => ffi::start_stream_exp_time(self.inner.pin_mut(), exp_time.as_millis() as i32),
-                None => ffi::start_stream(self.inner.pin_mut()),
-        })
-    }
-    
-    pub fn stop_stream(&mut self) -> Result<(), SLError> {
-        get_error(ffi::stop_stream(self.inner.pin_mut()))
+        slerror_to_result(self.device.pin_mut().CloseCamera())
     }
 
-    pub fn acquire_image(&mut self, buffer: &mut [u16]) -> SLBufferInfo {
-        ffi::acquire_image(self.inner.pin_mut(), buffer)
+    pub fn is_connected(&mut self) -> bool {
+        self.device.pin_mut().IsConnected()
+    }
+
+    pub fn start_stream(&mut self) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().StartStream())
+    }
+
+    pub fn stop_stream(&mut self) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().StopStream())
     }
 
     pub fn software_trigger(&mut self) -> Result<(), SLError> {
-        get_error(ffi::software_trigger(self.inner.pin_mut()))
+        slerror_to_result(self.device.pin_mut().SoftwareTrigger())
+    }
+
+    pub fn set_number_of_frames(&mut self, frames: u32) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetNumberOfFrames(frames as i32))
+    }
+
+    pub fn set_full_well_mode(&mut self, full_well_mode: FullWellModes) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetFullWell(full_well_mode))
+    }
+
+    pub fn get_roi(&mut self) -> Result<ROI, SLError> {
+        let mut roi = ROI::default();
+        match self.device.pin_mut().GetROI(&mut roi) {
+            SLError::SL_ERROR_SUCCESS => Ok(roi),
+            e => Err(e)
+        }
+    }
+
+    pub fn set_roi(&mut self, roi: ROI) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetROI(roi))
+    }
+
+    pub fn measure_temperature(&mut self, sensor: u32) -> Result<f32, SLError> {
+        let mut temp = 0.;
+        match self.device.pin_mut().MeasureTemperature(&mut temp, sensor as i32) {
+            SLError::SL_ERROR_SUCCESS => Ok(temp),
+            e => Err(e)
+        }
+    }
+
+    pub fn get_image_dims(&mut self) -> Result<(u32, u32), SLError> {
+        let (x, y) = (self.device.pin_mut().GetImageXDim(), self.device.pin_mut().GetImageYDim());
+        if x == -1 || y == -1 {
+            Err(SLError::SL_ERROR_INTERNAL)
+        } else {
+            Ok((x as u32, y as u32))
+        }
+    }
+
+    pub fn set_exposure_mode(&mut self, exposure_mode: sldevice_ffi::ExposureModes) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetExposureMode(exposure_mode))
     }
 
     pub fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError> {
-        get_error(ffi::set_exposure_time(self.inner.pin_mut(), exposure_time.as_millis() as i32))
+        slerror_to_result(self.device.pin_mut().SetExposureTime(exposure_time.as_millis() as i32))
     }
 
-    pub fn set_exposure_mode(&mut self, exposure_mode: ffi::ExposureModes) -> Result<(), SLError> {
-        get_error(ffi::set_exposure_mode(self.inner.pin_mut(), exposure_mode))
+    pub fn set_dds(&mut self, dds_on: bool) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetDDS(dds_on))
     }
 
-    pub fn set_number_of_frames(&mut self, frame_count: u32) -> Result<(), SLError> {
-        get_error(ffi::set_number_of_frames(self.inner.pin_mut(), frame_count as i32))
+    pub fn set_test_mode(&mut self, test_mode_on: bool) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetTestMode(test_mode_on))
     }
 
-    pub fn get_image_x_dim(&mut self) -> Result<u32, SLError> {
-        ffi::get_image_x_dim(self.inner.pin_mut())
-            .try_into()
-            .map_err(|_| SLError::Unknown)
+    pub fn acquire_image(&mut self, buffer: &mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
+        let buffer_info;
+        unsafe {
+            buffer_info = self.device.pin_mut().AcquireImage(buffer.as_mut_ptr() as *mut u16,
+            timeout.map_or(ACQUISITION_TIMEOUT_DEFAULT, |d| d.as_millis() as u32));
+        }
+        match buffer_info.error {
+            SLError::SL_ERROR_SUCCESS | SLError::SL_ERROR_MISSING_PACKETS => Ok(buffer_info),
+            e => Err(e.clone())
+        }
     }
-
-    pub fn get_image_y_dim(&mut self) -> Result<u32, SLError> {
-        ffi::get_image_y_dim(self.inner.pin_mut())
-            .try_into()
-            .map_err(|_| SLError::Unknown)
-    }
-
-    // pub fn set_roi(&mut self, roi: &mut ffi::ROIinfo) -> Result<(), SLError> {
-    //     get_error(ffi::set_roi(self.inner.pin_mut(), roi))
-    // }
-
-    // pub fn get_roi(&mut self) -> Result<ffi::ROIinfo, SLError> {
-    //     let mut roi = ffi::ROIinfo { X: 0, Y: 0, W: 0, H: 0};
-    //     match get_error(ffi::set_roi(self.inner.pin_mut(), &mut roi)) {
-    //         Ok(_) => Ok(roi),
-    //         Err(e) => Err(e),
-    //     }    
-    // }
-
-    /*
-    pub fn get_model_info(&mut self) -> ModelInfo {
-        ffi::get_model_info(self.inner.pin_mut())
-    }
-    */
 }
+
+unsafe impl Sync for SLDevice {}
+unsafe impl Send for SLDevice {}
 
 pub struct SLImage {
-    inner: UniquePtr<ffi::SLImage>
+    image: UniquePtr<slimage_ffi::SLImage>
 }
-
-unsafe impl Send for SLImage {}
-unsafe impl Sync for SLImage {}
 
 impl SLImage {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            inner: ffi::new_sl_image(width as i32, height as i32),
+            image: slimage_ffi::constuct_slimage_width_height(width as i32, height as i32).unwrap()
         }
     }
 
-    pub fn read_tiff_file(filename: &CxxString) -> Result<Self, ()> {
-        let mut image: SLImage = SLImage {
-            inner: ffi::new_sl_image(1, 1)
-        };
-
-        if ffi::read_tiff_image(filename, image.inner.pin_mut()) {
-            Ok(image)
-        }
-        else {
-            Err(())
+    pub fn new_stack(width: u32, height: u32, depth: u32) -> Self {
+        Self {
+            image: slimage_ffi::constuct_slimage_width_height_depth(width as i32, height as i32, depth as i32).unwrap()
         }
     }
 
-    pub fn get_data_pointer(&mut self, frame: u32) -> *mut u16 {
-        ffi::get_data_pointer(self.inner.pin_mut(), frame as i32)
+    pub fn width(&self) -> u32 {
+        self.image.GetWidth() as u32
     }
 
-    pub fn apply_offset_correction(&mut self, dark_map: &mut SLImage, dark_offset: u32) -> Result<(), SLError> {
-        unsafe { get_error(ffi::offset_correction(self.inner.pin_mut(), dark_map.inner.pin_mut(), dark_offset as i32)) }
+    pub fn height(&self) -> u32 {
+        self.image.GetHeight() as u32
     }
 
-    pub fn apply_gain_correction(&mut self, gain_map: &mut SLImage, dark_offset: u32) -> Result<(), SLError> {
-        unsafe { get_error(ffi::gain_correction(self.inner.pin_mut(), gain_map.inner.pin_mut(), dark_offset as i32)) }
+    pub fn depth(&self) -> u32 {
+        self.image.GetDepth() as u32
     }
 
-    pub fn apply_kernel_defect_correction(&mut self, defect_map: &mut SLImage) -> Result<(), SLError> {
-        unsafe { get_error(ffi::kernel_defect_correction(self.inner.pin_mut(), defect_map.inner.pin_mut())) }
+    pub fn get_frame_data(&mut self, frame: u32) -> &[u16] {
+        unsafe {
+            std::slice::from_raw_parts(self.image.pin_mut().GetDataPointer(frame as i32), (self.height() * self.width()) as usize)
+        }
+    }
+
+    pub fn get_frame_data_mut(&mut self, frame: u32) -> &mut [u16] {
+        unsafe {
+            std::slice::from_raw_parts_mut(self.image.pin_mut().GetDataPointer(frame as i32), (self.height() * self.width()) as usize)
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-}
+unsafe impl Sync for SLImage {}
+unsafe impl Send for SLImage {}

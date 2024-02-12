@@ -8,6 +8,7 @@ name = "wrapper"
 
 [dependencies]
 cxx = "1.0.111"
+serde = { version = "1.0.194", features = ["derive"] }
 thiserror = "1.0.51"
 specta = { workspace = true }
 

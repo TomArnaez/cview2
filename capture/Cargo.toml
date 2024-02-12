@@ -15,3 +15,4 @@ serde = { version = "1.0.194", features = ["derive"] }
 specta = { workspace = true }
 wrapper = { path = "../wrapper" }
 async-trait = "0.1.77"
+thiserror = "1.0.57"

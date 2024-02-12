@@ -8,19 +8,16 @@ fn main() {
 
     for lib_path in lib_paths {
         println!("cargo:rustc-link-search=native={}", lib_path);
-
     }    
 
     println!("cargo:rustc-link-lib=SLImage");
     println!("cargo:rustc-link-lib=SLDeviceLib");
-    println!("cargo:rustc-link-lib=libtiff");
-    println!("cargo:rustc-link-lib=libxdtusb");
-    println!("cargo:rustc-link-lib=XCLIBW64");
-    println!("cargo:rustc-link-lib=zlib");
-
 
     cxx_build::bridge("src/lib.rs")
-    .file("src/wrapper.cc")
     .includes(include_paths)
+    .flag_if_supported("-std=c++20")  // Specify C++20 standard
     .compile("cxx-demo");
+
+    println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/wrapper.h");
 }
