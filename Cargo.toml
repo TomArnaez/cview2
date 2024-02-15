@@ -9,6 +9,3 @@ members = [
 specta = { path = "C:/dev/repos/specta", features = ["uuid", "time", "glam", "chrono"] }
 tauri-specta = { path = "C:/dev/repos/tauri-specta", features = ["typescript", "javascript"] }
 log = { version = "0.4" }
-
-[patch.crates-io]
-tauri = {git="https://github.com/tauri-apps/tauri", branch="raw-display-handle"}

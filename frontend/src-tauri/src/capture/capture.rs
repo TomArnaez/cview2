@@ -1,19 +1,11 @@
 use std::time::Duration;
 
-use specta::Type;
-use tauri_specta::Event;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use wrapper::{FullWellModes, ROI};
 use chrono::{DateTime, Utc};
 
-#[tauri::command]
-#[specta::specta]
-pub fn run_capture(capture: Capture) {
-
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Capture {
     Stream,
     Sequence,
@@ -28,7 +20,7 @@ struct CaptureSettings {
     timeout: Duration,
 }
 
-#[derive(Debug, Clone, Serialize, Type, Event)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CaptureProgressEvent {
     pub id: Uuid,
     pub task_count: u32,
