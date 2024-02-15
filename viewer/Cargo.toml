@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 capture = { path = "../capture" }
-proc-macros = { path = "../proc-macros" }
 bitflags = { version = "2.4.1", features = ["serde"] }
 log = "0.4.20"
 nalgebra = { version = "0.32.3", features = ["serde-serialize"] }

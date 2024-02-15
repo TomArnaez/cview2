@@ -6,7 +6,7 @@
 
 using namespace SpectrumLogic;
 
-SLDeviceInfoRS convertDeviceInfo(const SLDeviceInfo& deviceInfo) {
+SLDeviceInfoRS convertDeviceInfoToRust(const SLDeviceInfo& deviceInfo) {
     return SLDeviceInfoRS {
         deviceInfo.Interface,
         deviceInfo.DetectorIPAddress,
@@ -18,6 +18,18 @@ SLDeviceInfoRS convertDeviceInfo(const SLDeviceInfo& deviceInfo) {
     };
 }
 
+SLDeviceInfo convertDeviceInfoToCxx(const SLDeviceInfoRS& deviceInfo) {
+    return SLDeviceInfo {
+        deviceInfo.device_interface,
+        std::string(deviceInfo.detector_ip_address),
+        std::string(deviceInfo.id),
+        static_cast<int>(deviceInfo.unit),
+        std::string(deviceInfo.params),
+        std::string(deviceInfo.force_ip),
+        std::string(deviceInfo.log_file_path)
+    };
+}
+
 namespace SLBindings {
     template<typename T, typename... Args>
     std::unique_ptr<T>
@@ -25,8 +37,12 @@ namespace SLBindings {
         return std::unique_ptr<T>(new T(args...));
     }
 
+    std::unique_ptr<SLDevice> construct_sldevice_from_devinfo(SLDeviceInfoRS devInfo) {
+        return std::unique_ptr<SLDevice>(new SLDevice(convertDeviceInfoToCxx(devInfo)));
+    }
+
     SLDeviceInfoRS get_device_info(SLDevice& device) {
-        return convertDeviceInfo(device.GetDeviceInfo());
+        return convertDeviceInfoToRust(device.GetDeviceInfo());
     }
 
     rust::Vec<SLDeviceInfoRS> scan_cameras() {
@@ -34,7 +50,7 @@ namespace SLBindings {
         rust::Vec<SLDeviceInfoRS> devicesRs;
 
         for (const auto& device : devices) 
-            devicesRs.push_back(convertDeviceInfo(device));
+            devicesRs.push_back(convertDeviceInfoToRust(device));
 
         return devicesRs;
     }

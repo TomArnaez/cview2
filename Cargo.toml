@@ -1,17 +1,14 @@
 [workspace]
-
 members = [
     "capture",
-    "proc-macros",
-    "viewer",
+    "frontend/src-tauri",
     "wrapper",
 ]
 
 [workspace.dependencies]
-specta = { path = "C:/dev/repos/specta", features = ["uuid", "time", "glam"] }
+specta = { path = "C:/dev/repos/specta", features = ["uuid", "time", "glam", "chrono"] }
 tauri-specta = { path = "C:/dev/repos/tauri-specta", features = ["typescript", "javascript"] }
 log = { version = "0.4" }
 
 [patch.crates-io]
-#tauri = {path = "A:/tauri-apps/tauri-v2/core/tauri"}
 tauri = {git="https://github.com/tauri-apps/tauri", branch="raw-display-handle"}

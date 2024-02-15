@@ -139,9 +139,8 @@ mod sldevice_ffi {
         #[rust_name="constuct_sldevice_with_interface"]
         #[namespace="SLBindings"]
         pub fn construct(device_interface: DeviceInterface) -> Result<UniquePtr<SLDevice>>;
-        // #[rust_name="constuct_sldevice_with_devinfo"]
-        // #[namespace="SLBindings"]
-        // pub fn construct(device_info: SLDeviceInfo) -> UniquePtr<SLDevice>;
+        #[namespace="SLBindings"]
+        pub fn construct_sldevice_from_devinfo(device_info: SLDeviceInfo) -> Result<UniquePtr<SLDevice>>;
         unsafe fn AcquireImage(self: Pin<&mut SLDevice>, buffer: *mut u16, timeout_ms: u32) -> SLBufferInfo;
         fn SetExposureTime(self: Pin<&mut SLDevice>, exposure_time_ms: i32) -> SLError;
         fn SetExposureMode(self: Pin<&mut SLDevice>, exposure_mode: ExposureModes) -> SLError;
@@ -218,9 +217,16 @@ impl SLDevice {
         }
     }
 
-    // pub fn new(device_info: SLDeviceInfo) -> Self {
-    //     Self {
-    //         device: sldevice_ffi::construct_sldevice_with_devinfo(device_info)
+    // pub fn new_from_device_info(device_info: SLDeviceInfo) -> Self {
+    //     match sldevice_ffi::construct_sldevice_from_devinfo(device_info) {
+    //         Ok(device) => {
+    //             Ok(Self {
+    //                 device
+    //             })
+    //         },
+    //         Err(exception) => {
+    //             Err(exception.what().to_string())
+    //         }
     //     }
     // }
 

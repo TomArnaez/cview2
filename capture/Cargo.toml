@@ -16,3 +16,4 @@ specta = { workspace = true }
 wrapper = { path = "../wrapper" }
 async-trait = "0.1.77"
 thiserror = "1.0.57"
+uuid = { version = "1.7.0", features = ["serde"] }
