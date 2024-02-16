@@ -1,28 +1,12 @@
-<script>
+<script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import "./styles.css";
-  import {CaptureManager, SequenceCapture} from "./core/capture";
+  import Viewer from "./lib/components/Viewer.svelte";
 
-  let captureManager = new CaptureManager();
-  let captureTask = new SequenceCapture(10); // Example initialization with 10 steps
+  onMount(async () => {
 
-// Function to start the capture process
-async function startCapture() {
-  await captureManager.runCapture(captureTask);
-  console.log('Capture process completed');
-}
-
+  });
 </script>
 
-<div class="flex h-screen">
-  <!-- Sidebar -->
-  <div class="w-64 bg-gray-800 text-white">
-    <!-- Sidebar content here -->
-    <div class="p-5">Sidebar</div>
-  </div>
+<Viewer/>
 
-  <!-- Main Content -->
-  <div class="flex-1 bg-gray-100">    
-    <div class="p-5">Main Content</div>
-    <button on:click="{startCapture}">Start Capture</button>
-  </div>
-</div>

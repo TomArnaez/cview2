@@ -37,6 +37,9 @@ fn create_shared_buffer(size: u64, app: AppHandle) -> SharedBuffer {
 }
 
 #[tauri::command]
+fn scan_cameras() {
+
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

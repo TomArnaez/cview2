@@ -1,6 +1,5 @@
 import { writable } from "svelte/store";
 
-
 export type CaptureProgressReport = {
     phase: string;
     message: string;
@@ -44,5 +43,5 @@ export class SequenceCapture implements ICapture {
     
           yield progressReport;
         }
-      }
+    }
 }
