@@ -14,9 +14,12 @@
     "@tauri-apps/api": "^2.0.0-beta.0",
     "@tauri-apps/plugin-shell": "^2.0.0-beta.0",
     "konva": "^9.3.3",
-    "neverthrow": "^6.1.0"
+    "neverthrow": "^6.1.0",
+    "svelte-spa-router": "^4.0.1"
   },
   "devDependencies": {
+    "@skeletonlabs/skeleton": "^2.8.0",
+    "@skeletonlabs/tw-plugin": "^0.3.1",
     "@sveltejs/vite-plugin-svelte": "^3.0.1",
     "@tauri-apps/cli": "^2.0.0-beta.0",
     "@tsconfig/svelte": "^5.0.2",

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import "./styles.css";
-  import Viewer from "./lib/components/Viewer.svelte";
+  import MainWindow from "./lib/MainWindow.svelte";
 
   onMount(async () => {
 
   });
 </script>
-
-<Viewer/>
-
+<div style="display: contents" class="h-full overflow-hidden">
+  <MainWindow/>
+</div>

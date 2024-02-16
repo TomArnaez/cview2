@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 import { Result, err, ok } from 'neverthrow';
 
-type PixelDataArray = Uint16Array | Float32Array;
+export type PixelDataArray = Uint16Array | Float32Array;
 
 type Rectangle = {
     type: "rectangle",
@@ -19,7 +19,7 @@ type Line = {
 
 type ROI = Rectangle | Line;
 
-class Image<T extends PixelDataArray> {
+export class SLImage<T extends PixelDataArray> {
     #data: T;
     #width: number;
     #height: number;
@@ -38,6 +38,10 @@ class Image<T extends PixelDataArray> {
         return this.#height;
     }
 
+    get data(): T {
+        return this.#data;
+    }
+
     getPixelValue(x: number, y: number): Result<number, Error> {
         if (x < 0 || x >= this.#width || y < 0 || y >= this.#height) {
             return err(new Error("Position out of bounds"));
@@ -45,4 +49,6 @@ class Image<T extends PixelDataArray> {
         return ok(this.#data[y * this.#width + x]);
     }
 }
-const images = writable<Image<PixelDataArray>[]>([]);
+
+export const images = writable<SLImage<PixelDataArray>[]>([]);
+export const selectedImage = writable<SLImage<PixelDataArray> | null>(null);
