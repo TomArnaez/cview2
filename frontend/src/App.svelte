@@ -1,5 +1,16 @@
 <script>
   import "./styles.css";
+  import {CaptureManager, SequenceCapture} from "./core/capture";
+
+  let captureManager = new CaptureManager();
+  let captureTask = new SequenceCapture(10); // Example initialization with 10 steps
+
+// Function to start the capture process
+async function startCapture() {
+  await captureManager.runCapture(captureTask);
+  console.log('Capture process completed');
+}
+
 </script>
 
 <div class="flex h-screen">
@@ -10,8 +21,8 @@
   </div>
 
   <!-- Main Content -->
-  <div class="flex-1 bg-gray-100">
-    <!-- Main content here -->
+  <div class="flex-1 bg-gray-100">    
     <div class="p-5">Main Content</div>
+    <button on:click="{startCapture}">Start Capture</button>
   </div>
 </div>
