@@ -7,6 +7,5 @@
 
   });
 </script>
-<div style="display: contents" class="h-full overflow-hidden">
-  <MainWindow/>
-</div>
+  
+<MainWindow/>
