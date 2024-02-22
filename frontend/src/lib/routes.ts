@@ -3,7 +3,7 @@ import Viewer from "./components/views/Viewer.svelte";
 
 const routes = {
     "/": Acquisition,
-    "/viewer":  Viewer
+    "/Viewer": Viewer
 };
 
 export default routes;

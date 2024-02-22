@@ -6,8 +6,6 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2_19, ICoreWebVi
 
 mod capture;
 
-
-
 #[derive(Debug)]
 struct SharedBuffer {
     uuid: Uuid,

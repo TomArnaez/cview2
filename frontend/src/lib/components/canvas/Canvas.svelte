@@ -2,7 +2,7 @@
     import Konva from 'konva';
     import { onMount } from "svelte";
     import { selectedImage } from "../../stores/imageStore";
-    import { convertImageToRGBACanvas } from '../../utils/canvasUtils';
+    import { convertImageToRGBACanvas } from "../../utils/canvasUtils";
 
     let stage: Konva.Stage;
     let layer: Konva.Layer;
@@ -22,13 +22,6 @@
         });
         
         layer = new Konva.Layer();
-        background = new Konva.Image({
-            x: 0,
-            y: 0,
-            width: stageWidth,
-            height: stageHeight,
-        });
-        layer.add(background);
         stage.add(layer);
     });
 
@@ -60,7 +53,7 @@
     }
 
     function clearBackgroundImage() {
-        background.image(null);
+        //background.image(null);
         layer.draw();
     }
 
@@ -112,7 +105,7 @@
         stage.container().style.cursor = 'default';
     }
 
-    function handleWheel(e: Konva.KonvaEventObject<MouseEvent>) {
+    function handleWheel(e: Konva.KonvaEventObject<WheelEvent>) {
         e.evt.preventDefault();
         const oldScale = stage.scaleX();
         const scaleBy = 1.1;
