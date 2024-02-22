@@ -1,3 +1,6 @@
 mod capture;
+mod detector;
 
-pub use capture::run_capture;
+pub mod commands;
+
+pub use detector::DetectorManager;

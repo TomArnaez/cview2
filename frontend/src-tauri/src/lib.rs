@@ -1,49 +1,44 @@
+use std::sync::Mutex;
+use log::info;
 use tauri::{AppHandle, Manager};
-use uuid::Uuid;
-use tokio::sync::oneshot;
-use windows_core::ComInterface;
-use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2_19, ICoreWebView2Environment12};
+use tauri_plugin_log::{Target, TargetKind};
 
 mod capture;
+mod image;
+mod shared_buffer;
 
-#[derive(Debug)]
-struct SharedBuffer {
-    uuid: Uuid,
-    size: u64, 
-    buffer: *mut u8,
-}
-
-unsafe impl Send for SharedBuffer {}
+use crate::capture::DetectorManager;
+use crate::shared_buffer::NewSharedBufferEvent;
+use crate::shared_buffer::SharedBuffer;
 
 #[tauri::command]
-fn create_shared_buffer(size: u64, app: AppHandle) -> SharedBuffer {
-    let (tx, rx) = oneshot::channel();
-    app.get_webview_window("main").unwrap().with_webview(move |webview| {
-            let webview2 = unsafe {webview.controller().CoreWebView2() }.unwrap().cast::<ICoreWebView2_19>().unwrap();
-            let environment: ICoreWebView2Environment12 = unsafe { webview2.Environment() }.unwrap().cast::<ICoreWebView2Environment12>().unwrap();
-            let shared_buffer = unsafe {environment.CreateSharedBuffer(size) }.unwrap();
-            let mut buffer: *mut u8 = std::ptr::null_mut();
-            unsafe {shared_buffer.Buffer(&mut buffer as *mut *mut u8) }.unwrap();
-            tx.send(SharedBuffer {
-                uuid: Uuid::new_v4(),
-                size,
-                buffer
-            }).unwrap();
-        }).unwrap();
+#[specta::specta]
+async fn init(app: AppHandle) {
+    info!("Running init");
+    app.manage(Mutex::new(DetectorManager::new().await));
 
-    rx.blocking_recv().unwrap()
-}
-
-#[tauri::command]
-fn scan_cameras() {
-
+    let shared_buffer = SharedBuffer::<u32>::new(100, app).await;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let specta_builder = {
+        let specta_builder = tauri_specta::ts::builder()
+            .events(tauri_specta::collect_events![NewSharedBufferEvent])
+            .commands(tauri_specta::collect_commands![init]);
+        let specta_builder = specta_builder.path("../src/bindings.ts");
+        specta_builder.into_plugin()
+    };
+    
     tauri::Builder::default()
+        .plugin(specta_builder)
+        .plugin(tauri_plugin_log::Builder::new().targets([
+            Target::new(TargetKind::Stdout),
+            Target::new(TargetKind::LogDir { file_name: None }),
+            Target::new(TargetKind::Webview),
+        ]).build())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![init])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

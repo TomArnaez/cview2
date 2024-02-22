@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
   import "./styles.css";
   import MainWindow from "./lib/MainWindow.svelte";
+  import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
 
   onMount(async () => {
-
+    window.chrome.webview.addEventListener("sharedbufferreceived", e => {
+      console.log(e);
+    })
+    await invoke("init");
   });
 </script>
   

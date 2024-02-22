@@ -1,7 +1,8 @@
 use std::time::Duration;
 use cxx::{type_id, Exception, ExternType, UniquePtr};
 use serde::{Deserialize, Serialize};
-pub use sldevice_ffi::{DeviceInterface, ExposureModes, FullWellModes, ROIinfo, SLDeviceInfo, SLError, scan_cameras};
+use specta::Type;
+pub use sldevice_ffi::{DeviceInterface, ExposureModes, ROIinfo, SLDeviceInfo, scan_cameras};
 
 const ACQUISITION_TIMEOUT_DEFAULT: u32 = 1000;
 
@@ -23,7 +24,7 @@ unsafe impl ExternType for SLBufferInfo {
     type Kind = cxx::kind::Trivial;
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, Type)]
 #[repr(C)]
 pub struct ROI {
     x: u32,
@@ -34,6 +35,59 @@ pub struct ROI {
 
 unsafe impl ExternType for ROI {
     type Id = type_id!("SpectrumLogic::ROIinfo");
+    type Kind = cxx::kind::Trivial;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[repr(u32)]
+pub enum SLError {
+    SL_ERROR_SUCCESS = 0,
+    SL_ERROR_INVALID_PARAM,
+    SL_ERROR_NO_DEVICE,
+    SL_ERROR_NOT_FOUND,
+    SL_ERROR_BUSY,
+    SL_ERROR_TIMEOUT,
+    SL_ERROR_CORRECTION,
+    SL_ERROR_NOT_SUPPORTED,
+    SL_ERROR_ALREADY_EXISTS,
+    SL_ERROR_INTERNAL,
+    SL_ERROR_OTHER,
+    SL_ERROR_DEVICE_CLOSED,
+    SL_ERROR_DEVICE_STREAMING,
+    SL_ERROR_CONFIG_FAILED,
+    SL_ERROR_CONFIG_FILE_NOT_FOUND,
+    SL_ERROR_NOT_ENOUGH_MEMORY,
+    SL_ERROR_OVERFLOW,
+    SL_ERROR_PIPE,
+    SL_ERROR_INTERRUPTED,
+    SL_ERROR_IO,
+    SL_ERROR_ACCESS,
+    SL_ERROR_REQUIRES_ADMIN,
+    SL_ERROR_CRITICAL,
+    SL_ERROR_NOT_INIT,
+    SL_ERROR_NOT_FILLED,
+    SL_ERROR_ABORTED,
+    SL_ERROR_RESENDS,
+    SL_ERROR_MISSING_PACKETS,
+    SL_ERROR_READ_FAILED,
+    SL_ERROR_WRITE_FAILED,
+}
+
+unsafe impl ExternType for SLError {
+    type Id = type_id!("SpectrumLogic::SLError");
+    type Kind = cxx::kind::Trivial;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[repr(u32)]
+pub enum FullWellModes {
+    Low = 0,
+    High = 2,
+    Unknown = 3
+}
+
+unsafe impl ExternType for FullWellModes {
+    type Id = type_id!("SpectrumLogic::FullWellModes");
     type Kind = cxx::kind::Trivial;
 }
 
@@ -68,49 +122,6 @@ mod sldevice_ffi {
         #[rust_name="XFPSMode"]
         xfps_mode,
     }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-    #[repr(u32)]
-    pub enum SLError {
-        SL_ERROR_SUCCESS = 0,
-        SL_ERROR_INVALID_PARAM,
-        SL_ERROR_NO_DEVICE,
-        SL_ERROR_NOT_FOUND,
-        SL_ERROR_BUSY,
-        SL_ERROR_TIMEOUT,
-        SL_ERROR_CORRECTION,
-        SL_ERROR_NOT_SUPPORTED,
-        SL_ERROR_ALREADY_EXISTS,
-        SL_ERROR_INTERNAL,
-        SL_ERROR_OTHER,
-        SL_ERROR_DEVICE_CLOSED,
-        SL_ERROR_DEVICE_STREAMING,
-        SL_ERROR_CONFIG_FAILED,
-        SL_ERROR_CONFIG_FILE_NOT_FOUND,
-        SL_ERROR_NOT_ENOUGH_MEMORY,
-        SL_ERROR_OVERFLOW,
-        SL_ERROR_PIPE,
-        SL_ERROR_INTERRUPTED,
-        SL_ERROR_IO,
-        SL_ERROR_ACCESS,
-        SL_ERROR_REQUIRES_ADMIN,
-        SL_ERROR_CRITICAL,
-        SL_ERROR_NOT_INIT,
-        SL_ERROR_NOT_FILLED,
-        SL_ERROR_ABORTED,
-        SL_ERROR_RESENDS,
-        SL_ERROR_MISSING_PACKETS,
-        SL_ERROR_READ_FAILED,
-        SL_ERROR_WRITE_FAILED,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-    #[repr(u32)]
-    pub enum FullWellModes {
-        Low = 0,
-        High = 2,
-        Unknown = 3
-    }
     
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[cxx_name="SLDeviceInfoRS"]
@@ -131,8 +142,8 @@ mod sldevice_ffi {
         type SLDevice;
         type ExposureModes;
         type DeviceInterface;
-        type FullWellModes;
-        type SLError;
+        type FullWellModes = crate::FullWellModes;
+        type SLError = crate::SLError;
         type SLBufferInfo = crate::SLBufferInfo;
         type ROIinfo = crate::ROI;
 
@@ -217,18 +228,20 @@ impl SLDevice {
         }
     }
 
-    // pub fn new_from_device_info(device_info: SLDeviceInfo) -> Self {
-    //     match sldevice_ffi::construct_sldevice_from_devinfo(device_info) {
-    //         Ok(device) => {
-    //             Ok(Self {
-    //                 device
-    //             })
-    //         },
-    //         Err(exception) => {
-    //             Err(exception.what().to_string())
-    //         }
-    //     }
-    // }
+    pub fn new_from_device_info(device_info: SLDeviceInfo) -> Result<Self, String> {
+        unsafe {
+            match sldevice_ffi::construct_sldevice_from_devinfo(device_info) {
+                Ok(device) => {
+                    Ok(Self {
+                        device
+                    })
+                },
+                Err(exception) => {
+                    Err(exception.what().to_string())
+                }
+            }
+        }
+    }
 
     pub fn scan_cameras() -> Result<Vec<SLDeviceInfo>, Exception> {
         sldevice_ffi::scan_cameras()
