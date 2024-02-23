@@ -6,15 +6,11 @@ return await TAURI_INVOKE("plugin:tauri-specta|init");
 }
 }
 
-export const events = __makeEvents__<{
-newSharedBufferEvent: NewSharedBufferEvent
-}>({
-newSharedBufferEvent: "plugin:tauri-specta:new-shared-buffer-event"
-})
+
 
 /** user-defined types **/
 
-export type NewSharedBufferEvent = [string, number]
+
 
 /** tauri-specta globals **/
 

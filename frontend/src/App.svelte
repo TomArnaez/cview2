@@ -6,8 +6,11 @@
 
   onMount(async () => {
     window.chrome.webview.addEventListener("sharedbufferreceived", e => {
-      console.log(e);
+      console.log(new Uint32Array(e.sharedBuffer));
     })
+
+    await invoke("init");
+    await invoke("init");
     await invoke("init");
   });
 </script>

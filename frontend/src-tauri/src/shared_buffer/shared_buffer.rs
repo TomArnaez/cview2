@@ -1,10 +1,8 @@
 use log::error;
-use tauri_specta::Event;
-use std::{error, marker::PhantomData, ops::Deref};
-use serde::Serialize;
+use std::{marker::PhantomData, ops::Deref};
 use tauri::{AppHandle, Manager, Runtime};
-use windows_core::{w, ComInterface, HSTRING, PCWSTR};
-use webview2_com::Microsoft::Web::WebView2::Win32::{COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY, ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_19,};
+use windows_core::{ComInterface, HSTRING, PCWSTR};
+use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_19, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -20,7 +18,7 @@ unsafe impl<T> Send for SharedBuffer<T> {}
 
 impl<T> Drop for SharedBuffer<T> {
     fn drop(&mut self) {
-        unsafe { self.shared_buffer.Close(); }
+        unsafe { self.shared_buffer.Close().unwrap(); }
     }
 }
 
@@ -40,14 +38,13 @@ impl<T: 'static> SharedBuffer<T> {
                 let webview2 = unsafe {webview.controller().CoreWebView2() }.unwrap().cast::<ICoreWebView2_19>().unwrap();
                 let environment: ICoreWebView2Environment12 = unsafe { webview2.Environment() }.unwrap().cast::<ICoreWebView2Environment12>().unwrap();
                 let shared_buffer: webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2SharedBuffer = unsafe {environment.CreateSharedBuffer(size).unwrap()};
-                let mut size: *mut u64 = std::ptr::null_mut();
-                unsafe { shared_buffer.Size(size)}.unwrap();
-                unsafe { println!{"{:?}", size} };
                 let mut buffer: *mut u8 = std::ptr::null_mut();
-                unsafe {shared_buffer.Buffer(&mut buffer as *mut *mut u8) }.unwrap();
-                unsafe {webview2.PostSharedBufferToScript(&shared_buffer, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY, w!("Test")).unwrap();}
+                unsafe {shared_buffer.Buffer(&mut buffer as *mut *mut u8)}.unwrap();
+                let uuid = Uuid::new_v4();
+                let additional_data_json = format!(r#"{{"uuid":"{}"}}"#, uuid.to_string());
+                unsafe {webview2.PostSharedBufferToScript(&shared_buffer, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE, PCWSTR(HSTRING::from(additional_data_json).as_ptr())).unwrap();}
                 match tx.send(SharedBuffer {
-                    uuid: Uuid::new_v4(),
+                    uuid,
                     len,
                     shared_buffer,
                     buffer: buffer as *mut T,
@@ -58,11 +55,6 @@ impl<T: 'static> SharedBuffer<T> {
                 }
             }).unwrap();
 
-        let shared_buffer = rx.await.unwrap();
-        NewSharedBufferEvent(shared_buffer.uuid, shared_buffer.len as u32).emit_all(&app).unwrap();
-        shared_buffer
+        rx.await.unwrap()
     }
 }
-
-#[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
-pub struct NewSharedBufferEvent(Uuid, u32);
