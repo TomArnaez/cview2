@@ -1,23 +1,24 @@
 <script lang="ts">
-    import { createSlider, melt } from '@melt-ui/svelte';
-    import { getContext } from 'svelte';
-    import type { Writable } from 'svelte/store';
+    import { createSlider, createSync, melt } from '@melt-ui/svelte';
 
-    const sharedValue: Writable<number[]> = getContext('sharedValue');
-
+    
+    export let value: number[];
     export let min: number;
     export let max: number;
     export let step: number;
 
     const {
-      elements: { root, range, thumbs },
+      elements: { root, range, thumbs, },
+      states,
     } = createSlider({
-      value: sharedValue,
       min: min,
       max: max,
       step: step,
     });
-  </script>
+
+    const sync = createSync(states)
+    $: sync.value(value, (v) => (value = v))
+</script>
   
   <span use:melt={$root} class="relative flex h-[20px] w-[200px] items-center">
     <span class="h-[3px] w-full bg-black/40">

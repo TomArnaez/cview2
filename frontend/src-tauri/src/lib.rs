@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 use log::info;
+use specta::ts::{BigIntExportBehavior, ExportConfig};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
@@ -8,24 +9,21 @@ mod image;
 mod shared_buffer;
 
 use crate::capture::DetectorManager;
-use crate::shared_buffer::SharedBuffer;
 
 #[tauri::command]
 #[specta::specta]
 async fn init(app: AppHandle) {
     info!("Running init");
-    //app.manage(Mutex::new(DetectorManager::new().await));
-
-    let shared_buffer = SharedBuffer::<u32>::new(100, app).await;
+    app.manage(Mutex::new(DetectorManager::new().await));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let specta_builder = {
         let specta_builder = tauri_specta::ts::builder()
-            .commands(tauri_specta::collect_commands![init]);
+            .commands(tauri_specta::collect_commands![init, capture::commands::run_capture]);
         let specta_builder = specta_builder.path("../src/bindings.ts");
-        specta_builder.into_plugin()
+        specta_builder.config(ExportConfig::new().bigint(BigIntExportBehavior::Number)).into_plugin()
     };
     
     tauri::Builder::default()

@@ -63,37 +63,37 @@ pub struct SequenceCapture {
     exposure_time: Duration
 }
 
-#[async_trait]
-impl Capture for SequenceCapture {
-    async fn run(&self, detector_handle: DetectorCaptureHandle, mut rx: mpsc::Receiver<CaptureCommand>) -> Result<mpsc::Receiver<CaptureResponse>, SLError> {
-        self.setup(detector_handle.clone(), self.acquisition_settings).await?;
-        let num_frames = self.num_frames;
-        detector_handle.set_exposure_mode(ExposureModes::SequenceMode).await?;
-        detector_handle.set_exposure_time(self.exposure_time).await?;
-        detector_handle.set_number_of_frames(self.num_frames).await?;
-        let (x, y) = detector_handle.get_image_dims().await?;
-        //let images = SLImage::new_stack(x, y, self.num_frames);
-        let timeout = self.acquisition_settings.timeout;
+// #[async_trait]
+// impl Capture for SequenceCapture {
+//     async fn run(&self, detector_handle: DetectorCaptureHandle, mut rx: mpsc::Receiver<CaptureCommand>) -> Result<mpsc::Receiver<CaptureResponse>, SLError> {
+//         self.setup(detector_handle.clone(), self.acquisition_settings).await?;
+//         let num_frames = self.num_frames;
+//         detector_handle.set_exposure_mode(ExposureModes::SequenceMode).await?;
+//         detector_handle.set_exposure_time(self.exposure_time).await?;
+//         detector_handle.set_number_of_frames(self.num_frames).await?;
+//         let (x, y) = detector_handle.get_image_dims().await?;
+//         //let images = SLImage::new_stack(x, y, self.num_frames);
+//         let timeout = self.acquisition_settings.timeout;
 
-        let (acq_tx, acq_rx) = mpsc::channel(10);
-        tokio::spawn(async move {
-            let mut count = 0;
-            let data = Arc::new(Mutex::new(vec![0u16; (x * y) as usize]));
-            while count < num_frames {
-                match detector_handle.acquire_image(Arc::clone(&data), Some(timeout)).await {
-                    Ok(buffer_info) => {
-                        acq_tx.send(CaptureResponse::Image(buffer_info)).await.unwrap();
-                        count += 1;
-                    },
-                    Err(e) => acq_tx.send(CaptureResponse::Error(e)).await.unwrap()
-                }
-            }
-            detector_handle.stop_stream().await;
-        });
+//         let (acq_tx, acq_rx) = mpsc::channel(10);
+//         tokio::spawn(async move {
+//             let mut count = 0;
+//             let data = Arc::new(Mutex::new(vec![0u16; (x * y) as usize]));
+//             while count < num_frames {
+//                 match detector_handle.acquire_image(Arc::clone(&data), Some(timeout)).await {
+//                     Ok(buffer_info) => {
+//                         acq_tx.send(CaptureResponse::Image(buffer_info)).await.unwrap();
+//                         count += 1;
+//                     },
+//                     Err(e) => acq_tx.send(CaptureResponse::Error(e)).await.unwrap()
+//                 }
+//             }
+//             detector_handle.stop_stream().await;
+//         });
 
-        Ok(acq_rx)
-    }
-}
+//         Ok(acq_rx)
+//     }
+// }
 
 #[derive(Debug, Clone, Serialize, Type, Event)]
 pub struct CaptureProgressEvent {
@@ -102,5 +102,4 @@ pub struct CaptureProgressEvent {
     pub completed_task_count: u32,
     pub phase: String,
     pub message: String,
-    pub estimated_completation: DateTime<Utc>
 }

@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.dependencies]
-specta = { path = "C:/dev/repos/specta", features = ["uuid", "time", "glam", "chrono"] }
+specta = { path = "C:/dev/repos/specta", features = ["uuid", "time"] }
 tauri-specta = { path = "C:/dev/repos/tauri-specta", features = ["typescript", "javascript"] }
 log = { version = "0.4" }
 

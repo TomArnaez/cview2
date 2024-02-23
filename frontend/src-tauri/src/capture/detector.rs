@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::time::Duration;
 use log::info;
-use tokio::sync::{mpsc, oneshot};
+use tauri::async_runtime::block_on;
+use tokio::sync::{mpsc, oneshot, Mutex};
 use wrapper::{scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI};
 use uuid::Uuid;
 
-use super::capture::Capture;
+use super::capture::{Capture, CaptureResponse};
 
 const HEARTBEAT_PERIOD: Duration = Duration::from_millis(500);
 
@@ -36,7 +37,7 @@ impl DetectorActor {
     async fn run(mut self, mut receiver: mpsc::Receiver<DetectorMessage>) {
         while let Some(message) = receiver.recv().await {
             match message {
-                DetectorMessage::AcquireImage(buffer, timeout, sender) => sender.send(self.detector.acquire_image(buffer.lock().unwrap().as_mut_slice(), timeout)).unwrap(),
+                DetectorMessage::AcquireImage(buffer, timeout, sender) => sender.send(self.detector.acquire_image(buffer.lock().await.as_mut_slice(), timeout)).unwrap(),
                 DetectorMessage::GetImageDims(sender) => sender.send(self.detector.get_image_dims()).unwrap(),
                 DetectorMessage::IsConnected(sender) => sender.send(self.detector.is_connected()).unwrap(), 
                 DetectorMessage::OpenCamera(sender) => sender.send(self.detector.open_camera()).unwrap(),
@@ -243,22 +244,22 @@ impl DetectorController {
             tauri::async_runtime::spawn(async move {
                 info!("Heartbeat thread started for {:?}", interface);
                 loop {
-                    // let mut inner_lock = inner.lock().unwrap();
-                    // inner_lock.detector_status = DetectorStatus::Idle;
-                    // match inner_lock.detector_status {
-                    //     DetectorStatus::Disconnected => {
-                    //         let detector_handle = detector_handle.clone();
-                    //         if tauri::async_runtime::spawn_blocking(move || detector_handle.open_camera()).is_ok() {
-                    //             inner_lock.detector_status = DetectorStatus::Idle;
-                    //         }
-                    //     },
-                    //     _ => {
-                    //         if !tauri::async_runtime::block_on(detector_handle.is_connected()) {
-                    //             inner_lock.detector_status = DetectorStatus::Disconnected;
-                    //         }
-                    //     }
-                    // }
-                    // status_tx.blocking_send(inner_lock.detector_status.clone()).unwrap();
+                    let mut inner_lock = inner.lock().await;
+                    inner_lock.detector_status = DetectorStatus::Idle;
+                    match inner_lock.detector_status {
+                        DetectorStatus::Disconnected => {
+                            let detector_handle = detector_handle.clone();
+                            if detector_handle.open_camera().await.is_ok() {
+                                inner_lock.detector_status = DetectorStatus::Idle;
+                            }
+                        },
+                        _ => {
+                            if !detector_handle.is_connected().await {
+                                inner_lock.detector_status = DetectorStatus::Disconnected;
+                            }
+                        }
+                    }
+                    status_tx.send(inner_lock.detector_status.clone()).await.unwrap();
                     std::thread::sleep(HEARTBEAT_PERIOD)
                 }
             })
@@ -279,27 +280,77 @@ impl DetectorController {
     }
 }
 
+
+use futures::stream::SelectAll;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+
 pub struct DetectorManager {
-    detectors: HashMap<Uuid, DetectorController>
+    streams: Arc<Mutex<SelectAll<ReceiverStream<DetectorStatus>>>>,
 }
 
 impl DetectorManager {
     pub async fn new() -> Self {
         let cameras = SLDevice::scan_cameras().unwrap();
-        let mut detectors = HashMap::new();
+        // let mut detectors = HashMap::new();
+
+        let mut streams = SelectAll::<ReceiverStream<DetectorStatus>>::new();
+
+        println!("{:?}", cameras.len());
 
         for device_info in cameras {
             let (tx, rx) = mpsc::channel(10);
-            let detector_controller = DetectorController::new_from_device_info(device_info, tx).await;
-            detectors.insert(Uuid::new_v4(), detector_controller);
+            let controller = DetectorController::new_from_device_info(device_info, tx).await;
+            streams.push(ReceiverStream::new(rx));
+        }
+
+        let streams =  Arc::new(Mutex::new(streams));
+        {
+            let streams = streams.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut streams = streams.lock().await;
+                while let Some(message) = streams.next().await {
+                    println!("Received: {:?}", message);
+                    // Handle the message
+                }
+            });
         }
 
         DetectorManager {
-            detectors
+            streams
         }
-    }
 
-    pub fn get_detector_controller(&self, uuid: Uuid) -> Option<&DetectorController> {
-        self.detectors.get(&uuid)
+        // for device_info in cameras {
+        //     let (tx, rx) = mpsc::channel(10);
+        //     let controller = DetectorController::new_from_device_info(device_info, tx).await;
+        //     let uuid = Uuid::new_v4();
+        //     detectors.insert(uuid, DetectorState {
+        //         uuid,
+        //         controller,
+        //         detector_rx: rx,
+        //         capture_rx: None
+        //     });
+        // }
+
+        // let detectors_mutex = Arc::new(std::sync::Mutex::new(detectors));
+
+        // {
+        //     let detector_mutex = detectors_mutex.clone();
+        //     tokio::spawn(async move {
+        //         let mut streams = Vec::new();
+                
+        //         // Lock the mutex and access the detectors HashMap
+        //         let detectors = detector_mutex.lock().unwrap();
+        //         for (_uuid, detector_state) in detectors.iter() {
+        //             let detector_rx_stream = tokio_stream::wrappers::ReceiverStream::new(detector_state.detector_rx);
+        //             streams.push(detector_rx_stream);
+        //         }
+
+        //     });
+        // }
+
+        // DetectorManager {
+        //     detectors: detectors_mutex
+        // }
     }
 }
