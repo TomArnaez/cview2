@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 use log::info;
-use specta::ts::{BigIntExportBehavior, ExportConfig};
+use specta::{ts::{BigIntExportBehavior, ExportConfig}, Type};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
@@ -8,13 +8,14 @@ mod capture;
 mod image;
 mod shared_buffer;
 
-use crate::capture::DetectorManager;
+use crate::{capture::DetectorManager, image::ImageManager};
 
 #[tauri::command]
 #[specta::specta]
 async fn init(app: AppHandle) {
     info!("Running init");
     app.manage(Mutex::new(DetectorManager::new().await));
+    app.manage(Mutex::new(ImageManager::new()));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

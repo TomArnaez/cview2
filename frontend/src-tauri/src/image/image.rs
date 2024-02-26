@@ -1,40 +1,101 @@
-use image::{ImageBuffer, Pixel};
+use std::{mem::size_of, sync::mpsc::Sender};
+use image::{imageops, ImageBuffer, Pixel, PixelWithColorType};
+use specta::Type;
+use tauri::AppHandle;
 use uuid::Uuid;
 
-use super::command::Command;
-use crate::shared_buffer::SharedBuffer;
+use crate::shared_buffer::{HasTypeTag, SharedBuffer};
 
-struct ImageHandler<P: Pixel> {
-    data: ImageBuffer<P, SharedBuffer<P::Subpixel>>,
-    history: Vec<Box<dyn Command>>,
-    uuid: Uuid
+use super::image_commands::Command;
+
+#[derive(Copy, Clone)]
+enum PixelType {
+    U32,
+    U16
 }
 
-impl<P: Pixel> ImageHandler<P> {
-    pub fn new(width: u32, height: u32, buffer: SharedBuffer<P::Subpixel>) -> Self {
-        Self {
-            data: ImageBuffer::from_raw(width, height, buffer).unwrap(),
-            history: Vec::new(),
-            uuid: Uuid::new_v4()
-        }
-    }
+trait PixelWrappedTrait {
+    fn channels(&self);
+}
 
-    pub fn width(&self) -> u32 {
+impl<T: Pixel> PixelWrappedTrait for T {
+    fn channels(&self) {
+        self.channels();
+    }
+}
+
+#[derive(Debug, Type)]
+pub struct ImageReport {
+    id: Uuid,
+    width: u32,
+    height: u32,
+}
+
+pub enum FlipDirection {
+    X,
+    Y
+}
+
+// Type erase the image pixel type
+pub trait DynImage {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    fn execute_command(&mut self, command: Box<dyn Command>);
+    fn undo(&mut self);
+    fn flip(&mut self, direction: FlipDirection);
+}
+
+pub struct ImageHandler<P: Pixel> 
+where P::Subpixel : HasTypeTag
+{
+    pub data: ImageBuffer<P, SharedBuffer<P::Subpixel>>,
+    commands: Vec<Box<dyn Command>>,
+    id: Uuid,
+    tx: Sender<ImageReport>
+}
+
+impl<P: PixelWithColorType> DynImage for ImageHandler<P>
+where
+    P::Subpixel: HasTypeTag,
+{
+    fn width(&self) -> u32 {
         self.data.width()
     }
 
-    pub fn height(&self) -> u32 {
+    fn height(&self) -> u32 {
         self.data.height()
     }
 
-    pub fn execute_command(&mut self, mut command: Box<dyn Command>) {
-        command.execute();
-        self.history.push(command);
+    fn execute_command(&mut self, command: Box<dyn Command>) {
+        command.execute(self);
+        self.commands.push(command);
     }
 
-    pub fn undo_command(&mut self) {
-        if let Some(mut command) = self.history.pop() {
-            command.undo();
+    fn undo(&mut self) {
+        
+    }
+
+    fn flip(&mut self, direction: FlipDirection) {
+        match direction {
+            FlipDirection::X => imageops::flip_horizontal_in_place(&mut self.data),
+            FlipDirection::Y => imageops::flip_vertical_in_place(&mut self.data),
         }
+    }
+}
+
+impl<P: PixelWithColorType> ImageHandler<P>
+where P::Subpixel : HasTypeTag + 'static
+{
+    pub fn new(id: Uuid, width: u32, height: u32, tx: Sender<ImageReport>, app: AppHandle) -> Self {
+        let buffer = SharedBuffer::<P::Subpixel>::new((width * height) as usize * size_of::<P::Subpixel>(), app);
+
+        let image_handler = Self {
+            data: ImageBuffer::from_raw(width, height, buffer).unwrap(),
+            id,
+            tx,
+            commands: Vec::new()
+        };
+
+        image_handler
     }
 }

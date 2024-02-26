@@ -6,7 +6,7 @@ pub use sldevice_ffi::{DeviceInterface, ExposureModes, ROIinfo, SLDeviceInfo, sc
 
 const ACQUISITION_TIMEOUT_DEFAULT: u32 = 1000;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
 #[repr(C)] 
 pub struct SLBufferInfo { 
     pub error: SLError, 
@@ -91,6 +91,8 @@ unsafe impl ExternType for FullWellModes {
     type Kind = cxx::kind::Trivial;
 }
 
+
+
 pub struct RegisterAddress(u32);
 
 #[cxx::bridge(namespace = "SpectrumLogic")]
@@ -98,12 +100,12 @@ mod sldevice_ffi {
     #[derive(Debug, Serialize, Deserialize)]
     #[repr(u32)]
     pub enum DeviceInterface {
-		CL = 0,
-		USB = 1,
-		PLEORA = 3,
-		S2I_GIGE = 4,
-		EIO_USB = 5,
-		UNKNOWN = 6
+        CL = 0,
+        USB = 1,
+        PLEORA = 3,
+        S2I_GIGE = 4,
+        EIO_USB = 5,
+        UNKNOWN = 6
     }
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

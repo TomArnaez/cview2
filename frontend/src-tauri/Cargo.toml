@@ -17,21 +17,21 @@ tauri-build = { version = "2.0.0-beta", features = [] }
 [dependencies]
 tauri = { version = "2.0.0-beta", features = ["test"] }
 tauri-plugin-log = "2.0.0-beta"
-specta = { workspace = true, features = ["time",] }
+specta = { workspace = true, features = ["time"] }
 tauri-specta = { workspace = true }
 serde = { version = "1.0.194", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1.7.0", features = ["serde"] }
 wrapper = { path = "../../wrapper" }
-chrono = { version = "0.4.34", features = ["serde"] }
 windows-core = "0.52.0"
 webview2-com = "0.28.0"
-tokio = { version = "1.36.0", features = ["sync"] }
+tokio = { version = "1.36.0", features = ["sync", "rt", "macros"] }
 image = "0.24.8"
 async-trait = "0.1.77"
 log.workspace = true
 tokio-stream = "0.1.14"
 futures = "0.3.30"
+thiserror = "1.0.57"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

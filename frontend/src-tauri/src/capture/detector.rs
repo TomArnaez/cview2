@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::sync::{Arc};
 use std::time::Duration;
 use log::info;
-use tauri::async_runtime::block_on;
+use serde::Serialize;
+use specta::Type;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use wrapper::{scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI};
 use uuid::Uuid;
 
-use super::capture::{Capture, CaptureResponse};
+use super::capture::{Capture, CaptureReport, CaptureResponse};
 
 const HEARTBEAT_PERIOD: Duration = Duration::from_millis(500);
 
@@ -273,13 +274,26 @@ impl DetectorController {
         }
     }
 
-    pub fn run_capture(&self, capture: &dyn Capture) {
+    pub async fn run_capture(&self, capture: &dyn Capture) -> Result<(), SLError> {
         let (tx, rx) = mpsc::channel(10);
         let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
-        capture.run(detector_capture_handle, rx);
+        let mut capture_rx = capture.run(detector_capture_handle, rx).await?;
+        tauri::async_runtime::spawn(async move {
+            while let Some(capture_res) = capture_rx.recv().await {
+                println!("{:?}", capture_res);
+            }
+        });
+
+        Ok(())
     }
 }
 
+
+#[derive(Debug, Clone, Serialize, Type)]
+struct DetectorReport {
+    uuid: Uuid,
+    capture_report: Option<CaptureReport>
+}
 
 use futures::stream::SelectAll;
 use tokio_stream::wrappers::ReceiverStream;
@@ -295,8 +309,6 @@ impl DetectorManager {
         // let mut detectors = HashMap::new();
 
         let mut streams = SelectAll::<ReceiverStream<DetectorStatus>>::new();
-
-        println!("{:?}", cameras.len());
 
         for device_info in cameras {
             let (tx, rx) = mpsc::channel(10);
@@ -352,5 +364,22 @@ impl DetectorManager {
         // DetectorManager {
         //     detectors: detectors_mutex
         // }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::mpsc::channel;
+
+    use wrapper::DeviceInterface;
+
+    use super::DetectorController;
+
+    #[tokio::test]
+    async fn test_controller() {
+        let (tx, rx) = channel(10);
+        let detector_controller = DetectorController::new_from_interface(DeviceInterface::EIO_USB, tx).await;
+
+        loop {}
     }
 }

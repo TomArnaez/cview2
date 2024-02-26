@@ -4,6 +4,14 @@
 async init() : Promise<null> {
 return await TAURI_INVOKE("plugin:tauri-specta|init");
 },
+async test() : Promise<__Result__<null, { uuid: string; len: number; _marker: null }>> {
+try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|test") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async runCapture(detectorId: string, capture: CaptureMode) : Promise<__Result__<null, null>> {
 try {
     return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|run_capture", { detectorId, capture }) };
