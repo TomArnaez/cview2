@@ -1,14 +1,14 @@
-use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 use log::info;
 use serde::Serialize;
 use specta::Type;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tauri::async_runtime::block_on;
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use wrapper::{scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI};
 use uuid::Uuid;
 
-use super::capture::{Capture, CaptureReport, CaptureResponse};
+use super::capture::{Capture, CaptureReport, CaptureResponse, DynCapture};
 
 const HEARTBEAT_PERIOD: Duration = Duration::from_millis(500);
 
@@ -65,18 +65,16 @@ pub struct DetectorHandle {
 
 impl DetectorHandle {
     pub fn new_from_interface(interface: DeviceInterface) -> Self {
-        let (sender, receiver) = mpsc::channel(8);
-        let detector = DetectorActor { detector: SLDevice::new(interface).unwrap() };
-        tokio::spawn(detector.run(receiver));
-
-        Self { sender }
+        DetectorHandle::setup(DetectorActor { detector: SLDevice::new(interface).unwrap() })
     }
 
     pub fn new_from_device_info(device_info: SLDeviceInfo) -> Self {
-        let (sender, receiver) = mpsc::channel(8);
-        let detector = DetectorActor { detector: SLDevice::new_from_device_info(device_info).unwrap() };
-        tokio::spawn(detector.run(receiver));
+        DetectorHandle::setup(DetectorActor { detector: SLDevice::new_from_device_info(device_info).unwrap() })
+    }
 
+    fn setup(detector: DetectorActor) -> DetectorHandle {
+        let (sender, receiver) = mpsc::channel(8);
+        std::thread::spawn(|| block_on(detector.run(receiver)));
         Self { sender }
     }
 
@@ -274,15 +272,19 @@ impl DetectorController {
         }
     }
 
-    pub async fn run_capture(&self, capture: &dyn Capture) -> Result<(), SLError> {
+    pub async fn run_capture<T: DynCapture>(&self, capture: T) -> Result<(), SLError> {
         let (tx, rx) = mpsc::channel(10);
         let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
-        let mut capture_rx = capture.run(detector_capture_handle, rx).await?;
-        tauri::async_runtime::spawn(async move {
-            while let Some(capture_res) = capture_rx.recv().await {
-                println!("{:?}", capture_res);
-            }
-        });
+        capture.run(detector_capture_handle, rx).await;
+        // let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
+        // let mut capture_rx = capture.run(detector_capture_handle, rx).await?;
+        // tauri::async_runtime::spawn(async move {
+        //     while let Some(capture_res) = capture_rx.recv().await {
+        //         println!("{:?}", capture_res);
+        //     }
+        // });
+
+
 
         Ok(())
     }

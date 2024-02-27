@@ -1,15 +1,36 @@
 use std::{sync::Arc, time::Duration};
+use log::info;
 use specta::Type;
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
-use tokio::sync::mpsc;
-use wrapper::{ExposureModes, FullWellModes, SLBufferInfo, SLError, ROI};
-
-
+use tokio::{pin, sync::{mpsc, watch}};
+use uuid::Uuid;
+use wrapper::{ExposureModes, FullWellModes, SLBufferInfo, SLError, SLImage, ROI};
+use tokio_stream::{Stream, StreamExt};
+use async_stream::stream;
 use super::detector::DetectorCaptureHandle;
 
-#[async_trait]
-pub trait Capture: {
+pub struct Capture {
+    id: Uuid,
+    report: Option<CaptureReport>,
+}
+
+pub struct CaptureState<Capture: StatefulCapture> {
+    pub steps: Vec<Capture::Step>,
+    pub data: Option<Capture::Data>,
+    pub step_number: usize,
+}
+
+pub trait StatefulCapture {
+    type Data;
+    type Step;
+    type CaptureResult;
+
+    async fn run(&self, detector_handle: DetectorCaptureHandle) -> Result<impl Stream<Item = SLImage>, SLError>;
+    async fn execute_step(&self, data: &Self::Data);
+    async fn finalise(&self, data: &Self::Data) -> Self::CaptureResult;
+}
+
+pub trait DynCapture: {
     async fn setup(&self, detector_handle: DetectorCaptureHandle, acquisition_settings: CaptureSettings) -> Result<(), SLError> {
         detector_handle.set_dds(acquisition_settings.dds_on).await?;
         detector_handle.set_full_well_mode(acquisition_settings.full_well_mode).await?;
@@ -19,11 +40,28 @@ pub trait Capture: {
         Ok(())
     }
 
-    async fn run(&self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>) -> Result<mpsc::Receiver<CaptureResponse>, SLError>;
+    fn id(&self) -> Uuid;
+    fn report(&self) -> &Option<CaptureReport>;
+    async fn run(&self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>);
+}
+
+impl DynCapture for Capture {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
+    fn report(&self) -> &Option<CaptureReport> {
+        &self.report
+    }
+
+    async fn run(&self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>) {
+        let id = self.id();
+        info!("Starting capture <id={id}");
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub enum CaptureMode {
+pub enum CaptureType {
     Stream(StreamCapture),
     Sequence(SequenceCapture),
 }
@@ -35,7 +73,7 @@ pub enum CaptureCommand {
 
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct CaptureReport {
-    capture: CaptureMode,
+    capture: CaptureType,
     frame: u32,
     buffer_info: SLBufferInfo
 }
@@ -68,40 +106,57 @@ pub struct SequenceCapture {
     exposure_time: Duration
 }
 
-#[async_trait]
-impl Capture for SequenceCapture {
-    async fn run(&self, detector_handle: DetectorCaptureHandle, mut rx: mpsc::Receiver<CaptureCommand>) -> Result<mpsc::Receiver<CaptureResponse>, SLError> {
-        self.setup(detector_handle.clone(), self.acquisition_settings).await?;
-        let num_frames = self.num_frames;
-        detector_handle.set_exposure_mode(ExposureModes::SequenceMode).await?;
-        detector_handle.set_exposure_time(self.exposure_time).await?;
-        detector_handle.set_number_of_frames(self.num_frames).await?;
-        let (x, y) = detector_handle.get_image_dims().await?;
-        //let images = SLImage::new_stack(x, y, self.num_frames);
-        let timeout = self.acquisition_settings.timeout;
+// impl StatefulCapture for SequenceCapture {
+//     type Data = u32;
 
-        let (acq_tx, acq_rx) = mpsc::channel(10);
-        let capture = self.clone();
-        tokio::spawn(async move {
-            let mut frame = 0;
-            let data = Arc::new(tokio::sync::Mutex::new(vec![0u16; (x * y) as usize]));
-            while frame < num_frames {
-                match detector_handle.acquire_image(Arc::clone(&data), Some(timeout)).await {
-                    Ok(buffer_info) => {
-                        acq_tx.send(CaptureResponse::Report(CaptureReport {
-                            buffer_info,
-                            capture: CaptureMode::Sequence(capture.clone()),
-                            frame
-                        })).await.unwrap();
-                        frame += 1;
-                    },
-                    Err(e) => acq_tx.send(CaptureResponse::Error(e)).await.unwrap()
-                }
-            }
-            detector_handle.stop_stream().await;
-        });
+//     async fn run(&self, detector_handle: DetectorCaptureHandle) -> Result<impl Stream<Item = SLImage>, SLError> {
+//         //self.setup(detector_handle.clone(), self.acquisition_settings).await?;
+//         let num_frames = self.num_frames;
+//         detector_handle.set_exposure_mode(ExposureModes::SequenceMode).await?;
+//         detector_handle.set_exposure_time(self.exposure_time).await?;
+//         detector_handle.set_number_of_frames(self.num_frames).await?;
+//         let (x, y) = detector_handle.get_image_dims().await?;
+//         let timeout = self.acquisition_settings.timeout;
 
-        Ok(acq_rx)
-    }
-}
+//         let capture = self.clone();
+
+//        Ok(stream! {
+//             let mut frame = 0;
+//             let data = Arc::new(tokio::sync::Mutex::new(vec![0u16; (x * y) as usize]));
+//             while frame < num_frames {
+//                 match detector_handle.acquire_image(Arc::clone(&data), Some(timeout)).await {
+//                     Ok(buffer_info) => {
+//                         yield SLImage::new(100, 100);
+//                         // report_watch_tx.send(CaptureReport {
+//                         //     buffer_info,
+//                         //     frame,
+//                         //     capture: CaptureMode::Sequence(capture.clone())
+//                         // });
+//                         frame += 1;
+//                     },
+//                     Err(e) => {},
+//                 }
+//             }
+//             detector_handle.stop_stream().await;
+//         })
+
+//         // let final_stream = stream! {
+//         //     pin!(stream);
+//         //     loop {
+//         //         tokio::select! {
+//         //             Some(cmd_message) = rx.recv() => {
+//         //                 match cmd_message {
+//         //                     CaptureCommand::Cancel => break,
+//         //                 }
+//         //             },
+//         //             Some(img) = stream.next() => {
+//         //                 yield img;
+//         //             },
+//         //             else => break,
+//         //         }}
+//         //     };
+
+//         // Ok(final_stream)
+//     }
+// }
 
