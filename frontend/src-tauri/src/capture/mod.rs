@@ -1,5 +1,6 @@
 mod capture;
 mod detector;
+mod report;
 
 pub mod commands;
 

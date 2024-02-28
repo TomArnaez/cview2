@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::VecDeque, sync::Arc, thread::JoinHandle, time::Duration};
 use log::info;
 use specta::Type;
 use serde::{Deserialize, Serialize};
@@ -7,30 +7,33 @@ use uuid::Uuid;
 use wrapper::{ExposureModes, FullWellModes, SLBufferInfo, SLError, SLImage, ROI};
 use tokio_stream::{Stream, StreamExt};
 use async_stream::stream;
-use super::detector::DetectorCaptureHandle;
+use super::{detector::DetectorCaptureHandle, report::CaptureReportUpdate};
 
-pub struct Capture {
+pub struct Capture<Capture: StatefulCapture> {
     id: Uuid,
     report: Option<CaptureReport>,
+    state: Option<CaptureState<Capture>>
 }
 
 pub struct CaptureState<Capture: StatefulCapture> {
-    pub steps: Vec<Capture::Step>,
+    pub init: Capture,
     pub data: Option<Capture::Data>,
+    pub steps: VecDeque<Capture::Step>,
     pub step_number: usize,
 }
 
-pub trait StatefulCapture {
-    type Data;
-    type Step;
+pub trait StatefulCapture: Send + Sync + 'static {
+    type Data: Send + Sync;
+    type Step: Send + Sync;
     type CaptureResult;
 
     async fn run(&self, detector_handle: DetectorCaptureHandle) -> Result<impl Stream<Item = SLImage>, SLError>;
-    async fn execute_step(&self, data: &Self::Data);
+    async fn init(&self) -> Vec<Self::Step>;
+    async fn execute_step(&self, step: &Self::Step, data: &Self::Data);
     async fn finalise(&self, data: &Self::Data) -> Self::CaptureResult;
 }
 
-pub trait DynCapture: {
+pub trait DynCapture: Send + Sync {
     async fn setup(&self, detector_handle: DetectorCaptureHandle, acquisition_settings: CaptureSettings) -> Result<(), SLError> {
         detector_handle.set_dds(acquisition_settings.dds_on).await?;
         detector_handle.set_full_well_mode(acquisition_settings.full_well_mode).await?;
@@ -42,10 +45,10 @@ pub trait DynCapture: {
 
     fn id(&self) -> Uuid;
     fn report(&self) -> &Option<CaptureReport>;
-    async fn run(&self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>);
+    async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>);
 }
 
-impl DynCapture for Capture {
+impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
     fn id(&self) -> Uuid {
         self.id
     }
@@ -54,11 +57,45 @@ impl DynCapture for Capture {
         &self.report
     }
 
-    async fn run(&self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>) {
+    async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>) {
         let id = self.id();
-        info!("Starting capture <id={id}");
+        info!("Starting capture <id={id}>");
+
+        let CaptureState { init, data, mut steps, mut step_number} = self.state.take().expect("criticla error: missing capture state");
+
+        let stateful_job = Arc::new(init);
+        let working_data = Arc::new(data.unwrap());
+        let mut job_should_run = true;
+
+        // Init phase
+        let init_task = {
+            let stateful_job = Arc::clone(&stateful_job);
+            tauri::async_runtime::spawn(async move {
+                let res = stateful_job.init().await;
+                
+                events_tx.send(CaptureReportUpdate::TaskCount(res.len())).await.unwrap();
+            })
+        };
+
+        while job_should_run && steps.is_empty() {
+            let stateful_job = Arc::clone(&stateful_job);
+            let working_data = Arc::clone(&working_data);
+
+            let step = Arc::new(steps.pop_front().unwrap());
+            let step_task = tauri::async_runtime::spawn(async move {
+                stateful_job.execute_step(&step, &working_data).await;
+            });
+        }        
     }
 }
+
+async fn handle_single_step<SJob: StatefulCapture>(
+    step_task: JoinHandle<()>,
+    mut commands_rx: mpsc::Receiver<CaptureCommand>
+) {
+    
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum CaptureType {
