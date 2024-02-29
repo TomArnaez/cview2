@@ -3,6 +3,7 @@ use cxx::{type_id, Exception, ExternType, UniquePtr};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 pub use sldevice_ffi::{DeviceInterface, ExposureModes, ROIinfo, SLDeviceInfo, scan_cameras};
+use thiserror::Error;
 
 const ACQUISITION_TIMEOUT_DEFAULT: u32 = 1000;
 
@@ -38,40 +39,71 @@ unsafe impl ExternType for ROI {
     type Kind = cxx::kind::Trivial;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error, Serialize, Deserialize, Type)]
 #[repr(u32)]
 pub enum SLError {
+    #[error("Success")]
     SL_ERROR_SUCCESS = 0,
+    #[error("Invalid parameter provided")]
     SL_ERROR_INVALID_PARAM,
+    #[error("No device found")]
     SL_ERROR_NO_DEVICE,
+    #[error("Requested entity not found")]
     SL_ERROR_NOT_FOUND,
+    #[error("Device or resource is busy")]
     SL_ERROR_BUSY,
+    #[error("Operation timed out")]
     SL_ERROR_TIMEOUT,
+    #[error("Error during correction process")]
     SL_ERROR_CORRECTION,
+    #[error("Operation not supported")]
     SL_ERROR_NOT_SUPPORTED,
+    #[error("Entity already exists")]
     SL_ERROR_ALREADY_EXISTS,
+    #[error("Internal error occurred")]
     SL_ERROR_INTERNAL,
+    #[error("An unspecified error occurred")]
     SL_ERROR_OTHER,
+    #[error("Device has been closed")]
     SL_ERROR_DEVICE_CLOSED,
+    #[error("Device is currently streaming")]
     SL_ERROR_DEVICE_STREAMING,
+    #[error("Configuration failed")]
     SL_ERROR_CONFIG_FAILED,
+    #[error("Configuration file not found")]
     SL_ERROR_CONFIG_FILE_NOT_FOUND,
+    #[error("Not enough memory available")]
     SL_ERROR_NOT_ENOUGH_MEMORY,
+    #[error("Overflow error occurred")]
     SL_ERROR_OVERFLOW,
+    #[error("Pipe error occurred")]
     SL_ERROR_PIPE,
+    #[error("Operation interrupted")]
     SL_ERROR_INTERRUPTED,
+    #[error("I/O error occurred")]
     SL_ERROR_IO,
+    #[error("Access denied")]
     SL_ERROR_ACCESS,
+    #[error("Operation requires administrator privileges")]
     SL_ERROR_REQUIRES_ADMIN,
+    #[error("Critical error occurred")]
     SL_ERROR_CRITICAL,
+    #[error("System not initialized")]
     SL_ERROR_NOT_INIT,
+    #[error("Required data not filled")]
     SL_ERROR_NOT_FILLED,
+    #[error("Operation aborted")]
     SL_ERROR_ABORTED,
+    #[error("Excessive resends detected")]
     SL_ERROR_RESENDS,
+    #[error("Missing packets detected")]
     SL_ERROR_MISSING_PACKETS,
+    #[error("Failed to read")]
     SL_ERROR_READ_FAILED,
+    #[error("Failed to write")]
     SL_ERROR_WRITE_FAILED,
 }
+
 
 unsafe impl ExternType for SLError {
     type Id = type_id!("SpectrumLogic::SLError");
@@ -90,8 +122,6 @@ unsafe impl ExternType for FullWellModes {
     type Id = type_id!("SpectrumLogic::FullWellModes");
     type Kind = cxx::kind::Trivial;
 }
-
-
 
 pub struct RegisterAddress(u32);
 
@@ -231,16 +261,14 @@ impl SLDevice {
     }
 
     pub fn new_from_device_info(device_info: SLDeviceInfo) -> Result<Self, String> {
-        unsafe {
-            match sldevice_ffi::construct_sldevice_from_devinfo(device_info) {
-                Ok(device) => {
-                    Ok(Self {
-                        device
-                    })
-                },
-                Err(exception) => {
-                    Err(exception.what().to_string())
-                }
+        match sldevice_ffi::construct_sldevice_from_devinfo(device_info) {
+            Ok(device) => {
+                Ok(Self {
+                    device
+                })
+            },
+            Err(exception) => {
+                Err(exception.what().to_string())
             }
         }
     }
