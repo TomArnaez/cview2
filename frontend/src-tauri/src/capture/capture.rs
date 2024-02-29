@@ -1,18 +1,51 @@
-use std::{collections::VecDeque, sync::Arc, thread::JoinHandle, time::Duration};
+use std::{borrow::BorrowMut, collections::VecDeque, sync::Arc, time::Duration};
 use log::info;
 use specta::Type;
-use serde::{Deserialize, Serialize};
-use tokio::{pin, sync::{mpsc, watch}};
+use serde::{de, Deserialize, Serialize};
+use tokio::{pin, sync::{broadcast, mpsc, watch, Mutex}};
 use uuid::Uuid;
 use wrapper::{ExposureModes, FullWellModes, SLBufferInfo, SLError, SLImage, ROI};
-use tokio_stream::{Stream, StreamExt};
-use async_stream::stream;
-use super::{detector::DetectorCaptureHandle, report::CaptureReportUpdate};
+use tauri::async_runtime::JoinHandle;
+use super::{detector::DetectorCaptureHandle, error::JobError, report::CaptureReportUpdate};
 
 pub struct Capture<Capture: StatefulCapture> {
     id: Uuid,
     report: Option<CaptureReport>,
     state: Option<CaptureState<Capture>>
+}
+
+impl <SJob: StatefulCapture> Capture<SJob> {
+    pub fn new(init: SJob) -> Box<Self> {
+        CaptureBuilder::new(init).build()
+    }
+}
+
+pub struct CaptureBuilder<SJob: StatefulCapture> {
+    id: Uuid,
+    init: SJob
+}
+
+impl<SJob: StatefulCapture> CaptureBuilder<SJob> {
+    pub fn build(self) -> Box<Capture<SJob>> {
+        Box::new(Capture::<SJob> {
+            id: self.id,
+            report: None,
+            state: Some(CaptureState {
+                data: None,
+                init: self.init,
+                steps: VecDeque::new(),
+                step_number: 0
+            })
+        })
+    }
+
+	pub fn new(init: SJob) -> Self {
+		let id = Uuid::new_v4();
+		Self {
+			id,
+			init,
+		}
+    }
 }
 
 pub struct CaptureState<Capture: StatefulCapture> {
@@ -22,30 +55,21 @@ pub struct CaptureState<Capture: StatefulCapture> {
     pub step_number: usize,
 }
 
+#[async_trait::async_trait]
 pub trait StatefulCapture: Send + Sync + 'static {
     type Data: Send + Sync;
     type Step: Send + Sync;
-    type CaptureResult;
+    type Result;
 
-    async fn run(&self, detector_handle: DetectorCaptureHandle) -> Result<impl Stream<Item = SLImage>, SLError>;
-    async fn init(&self) -> Vec<Self::Step>;
-    async fn execute_step(&self, step: &Self::Step, data: &Self::Data);
-    async fn finalise(&self, data: &Self::Data) -> Self::CaptureResult;
+    async fn init(&self, detector_handle: DetectorCaptureHandle) -> Result<VecDeque<Self::Step>, JobError>;
+    async fn execute_step(&self, step: &Self::Step, data: &mut Self::Data);
+    async fn finalise(&self, data: Self::Data) -> Self::Result;
 }
 
 pub trait DynCapture: Send + Sync {
-    async fn setup(&self, detector_handle: DetectorCaptureHandle, acquisition_settings: CaptureSettings) -> Result<(), SLError> {
-        detector_handle.set_dds(acquisition_settings.dds_on).await?;
-        detector_handle.set_full_well_mode(acquisition_settings.full_well_mode).await?;
-        detector_handle.set_roi(acquisition_settings.roi).await?;
-        detector_handle.set_test_mode(acquisition_settings.test_mode).await?;
-        
-        Ok(())
-    }
-
     fn id(&self) -> Uuid;
     fn report(&self) -> &Option<CaptureReport>;
-    async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>);
+    async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: watch::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>) -> Result<(), JobError>;
 }
 
 impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
@@ -57,50 +81,92 @@ impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
         &self.report
     }
 
-    async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: mpsc::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>) {
+    async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: watch::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>) -> Result<(), JobError> {
         let id = self.id();
         info!("Starting capture <id={id}>");
 
         let CaptureState { init, data, mut steps, mut step_number} = self.state.take().expect("criticla error: missing capture state");
 
         let stateful_job = Arc::new(init);
-        let working_data = Arc::new(data.unwrap());
-        let mut job_should_run = true;
+        let working_data = Arc::new(Mutex::new(data));
 
-        // Init phase
         let init_task = {
             let stateful_job = Arc::clone(&stateful_job);
             tauri::async_runtime::spawn(async move {
-                let res = stateful_job.init().await;
-                
-                events_tx.send(CaptureReportUpdate::TaskCount(res.len())).await.unwrap();
+                let res = stateful_job.init(detector_handle).await;
+
+                if let Ok(res) = res.as_ref() {
+                    events_tx.send(CaptureReportUpdate::TaskCount(res.len())).await.unwrap();
+                }
+                res
             })
         };
 
-        while job_should_run && steps.is_empty() {
+        steps = handle_init_phase::<SJob>(init_task, rx.clone()).await?;
+
+        while steps.is_empty() {
             let stateful_job = Arc::clone(&stateful_job);
             let working_data = Arc::clone(&working_data);
-
+            
             let step = Arc::new(steps.pop_front().unwrap());
             let step_task = tauri::async_runtime::spawn(async move {
-                stateful_job.execute_step(&step, &working_data).await;
+                //stateful_job.execute_step(&step, working_data.lock().await.borrow_mut()).await;
             });
-        }        
+            handle_single_step(step_task, rx.clone());
+
+            step_number += 1;
+        }
+
+        Ok(())        
     }
 }
 
-async fn handle_single_step<SJob: StatefulCapture>(
-    step_task: JoinHandle<()>,
-    mut commands_rx: mpsc::Receiver<CaptureCommand>
-) {
-    
+
+async fn handle_init_phase<SJob: StatefulCapture>
+(
+    mut init_task: JoinHandle<Result<VecDeque<SJob::Step>, JobError>>,
+    mut commands_rx: watch::Receiver<CaptureCommand>
+) -> Result<VecDeque<SJob::Step>, JobError> {
+    tokio::select! {
+        result = &mut init_task => {
+            return result.unwrap();
+        },
+        Ok(_) = commands_rx.changed() => {
+            match *commands_rx.borrow() {
+                CaptureCommand::Cancel => {
+                    init_task.abort();
+                    info!("Cancelling Job");
+                    return Err(JobError::Cancelled);
+                },            
+            }
+        }
+    }
+}
+
+async fn handle_single_step(
+    mut step_task: JoinHandle<()>,
+    mut commands_rx: watch::Receiver<CaptureCommand>
+) -> Result<(), JobError> {
+    tokio::select! {
+        result = &mut step_task => {
+            return Ok(());
+        },
+        Ok(_) = commands_rx.changed() => {
+            match *commands_rx.borrow() {
+                CaptureCommand::Cancel => {
+                    step_task.abort();
+                    info!("Cancelling Job");
+                    return Err(JobError::Cancelled);
+                },
+            }
+        }
+    }
 }
 
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum CaptureType {
     Stream(StreamCapture),
-    Sequence(SequenceCapture),
 }
 
 #[derive(Debug)]
@@ -110,9 +176,9 @@ pub enum CaptureCommand {
 
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct CaptureReport {
-    capture: CaptureType,
-    frame: u32,
-    buffer_info: SLBufferInfo
+    // capture: CaptureType,
+    // frame: u32,
+    // buffer_info: SLBufferInfo
 }
 
 #[derive(Debug)]
@@ -122,12 +188,12 @@ pub enum CaptureResponse {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type)]
-struct CaptureSettings {
-    dds_on: bool,
-    full_well_mode: FullWellModes,
-    roi: ROI,
-    test_mode: bool,
-    timeout: Duration,
+pub struct CaptureSettings {
+    pub dds_on: bool,
+    pub full_well_mode: FullWellModes,
+    pub roi: ROI,
+    pub test_mode: bool,
+    pub timeout: Duration,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -135,65 +201,3 @@ pub struct StreamCapture {
     capture_settings: CaptureSettings,
     stream_time: Option<Duration>,
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize, Type)]
-pub struct SequenceCapture {
-    acquisition_settings: CaptureSettings,
-    num_frames: u32,
-    exposure_time: Duration
-}
-
-// impl StatefulCapture for SequenceCapture {
-//     type Data = u32;
-
-//     async fn run(&self, detector_handle: DetectorCaptureHandle) -> Result<impl Stream<Item = SLImage>, SLError> {
-//         //self.setup(detector_handle.clone(), self.acquisition_settings).await?;
-//         let num_frames = self.num_frames;
-//         detector_handle.set_exposure_mode(ExposureModes::SequenceMode).await?;
-//         detector_handle.set_exposure_time(self.exposure_time).await?;
-//         detector_handle.set_number_of_frames(self.num_frames).await?;
-//         let (x, y) = detector_handle.get_image_dims().await?;
-//         let timeout = self.acquisition_settings.timeout;
-
-//         let capture = self.clone();
-
-//        Ok(stream! {
-//             let mut frame = 0;
-//             let data = Arc::new(tokio::sync::Mutex::new(vec![0u16; (x * y) as usize]));
-//             while frame < num_frames {
-//                 match detector_handle.acquire_image(Arc::clone(&data), Some(timeout)).await {
-//                     Ok(buffer_info) => {
-//                         yield SLImage::new(100, 100);
-//                         // report_watch_tx.send(CaptureReport {
-//                         //     buffer_info,
-//                         //     frame,
-//                         //     capture: CaptureMode::Sequence(capture.clone())
-//                         // });
-//                         frame += 1;
-//                     },
-//                     Err(e) => {},
-//                 }
-//             }
-//             detector_handle.stop_stream().await;
-//         })
-
-//         // let final_stream = stream! {
-//         //     pin!(stream);
-//         //     loop {
-//         //         tokio::select! {
-//         //             Some(cmd_message) = rx.recv() => {
-//         //                 match cmd_message {
-//         //                     CaptureCommand::Cancel => break,
-//         //                 }
-//         //             },
-//         //             Some(img) = stream.next() => {
-//         //                 yield img;
-//         //             },
-//         //             else => break,
-//         //         }}
-//         //     };
-
-//         // Ok(final_stream)
-//     }
-// }
-

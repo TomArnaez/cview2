@@ -22,7 +22,7 @@ async fn init(app: AppHandle) {
 pub fn run() {
     let specta_builder = {
         let specta_builder = tauri_specta::ts::builder()
-            .commands(tauri_specta::collect_commands![init, capture::commands::run_capture]);
+            .commands(tauri_specta::collect_commands![init]);
         let specta_builder = specta_builder.path("../src/bindings.ts");
         specta_builder.config(ExportConfig::new().bigint(BigIntExportBehavior::Number)).into_plugin()
     };

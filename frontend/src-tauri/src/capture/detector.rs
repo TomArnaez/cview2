@@ -8,12 +8,12 @@ use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use wrapper::{scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI};
 use uuid::Uuid;
 
-use super::capture::{Capture, CaptureReport, CaptureResponse, DynCapture};
+use super::{capture::{Capture, CaptureCommand, CaptureReport, CaptureResponse, DynCapture}, error::DetectorControllerError};
 
 const HEARTBEAT_PERIOD: Duration = Duration::from_millis(500);
 
 enum DetectorMessage {
-    AcquireImage(Arc<Mutex<Vec<u16>>>, Option<Duration>, oneshot::Sender<Result<SLBufferInfo, SLError>>),
+    AcquireImage(&'static mut [u16], Option<Duration>, oneshot::Sender<Result<SLBufferInfo, SLError>>),
     CloseCamera(oneshot::Sender<Result<(), SLError>>),
     GetImageDims(oneshot::Sender<Result<(u32, u32), SLError>>),
     IsConnected(oneshot::Sender<bool>),
@@ -38,7 +38,7 @@ impl DetectorActor {
     async fn run(mut self, mut receiver: mpsc::Receiver<DetectorMessage>) {
         while let Some(message) = receiver.recv().await {
             match message {
-                DetectorMessage::AcquireImage(buffer, timeout, sender) => sender.send(self.detector.acquire_image(buffer.lock().await.as_mut_slice(), timeout)).unwrap(),
+                DetectorMessage::AcquireImage(buffer, timeout, sender) => sender.send(self.detector.acquire_image(buffer, timeout)).unwrap(),
                 DetectorMessage::GetImageDims(sender) => sender.send(self.detector.get_image_dims()).unwrap(),
                 DetectorMessage::IsConnected(sender) => sender.send(self.detector.is_connected()).unwrap(), 
                 DetectorMessage::OpenCamera(sender) => sender.send(self.detector.open_camera()).unwrap(),
@@ -128,7 +128,7 @@ impl DetectorCaptureHandle {
         }
     }
 
-    pub async fn acquire_image(&self, buffer: Arc<Mutex<Vec<u16>>>, timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
+    pub async fn acquire_image(&self, buffer: &'static mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
         let (resp_sender, resp_receiver) = oneshot::channel();
         let _ = self.sender.send(DetectorMessage::AcquireImage(buffer, timeout, resp_sender)).await;
         resp_receiver.await.expect("Actor task has been killed")
@@ -272,21 +272,22 @@ impl DetectorController {
         }
     }
 
-    pub async fn run_capture<T: DynCapture>(&self, capture: T) -> Result<(), SLError> {
-        let (tx, rx) = mpsc::channel(10);
-        let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
-        capture.run(detector_capture_handle, rx).await;
-        // let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
-        // let mut capture_rx = capture.run(detector_capture_handle, rx).await?;
-        // tauri::async_runtime::spawn(async move {
-        //     while let Some(capture_res) = capture_rx.recv().await {
-        //         println!("{:?}", capture_res);
-        //     }
-        // });
+    pub async fn run_capture<T: DynCapture>(&self, capture: &mut T) -> Result<(), DetectorControllerError> {
+        let mut inner_lock = self.inner.lock().await;
+        match inner_lock.detector_status {
+            DetectorStatus::Disconnected => return Err(DetectorControllerError::DetectorDisconnected),
+            DetectorStatus::Capturing => return Err(DetectorControllerError::CaptureInProgress),
+            DetectorStatus::Idle => {
+                inner_lock.detector_status = DetectorStatus::Capturing;
+                let (command_tx, command_rx) = watch::channel::<CaptureCommand>(CaptureCommand::Cancel);
+                let (report_tx, report_rx) = mpsc::channel(10);
+                let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
+                capture.run(detector_capture_handle, command_rx, report_tx).await;
+        
+                Ok(())
+            },
+        }
 
-
-
-        Ok(())
     }
 }
 
@@ -297,41 +298,24 @@ struct DetectorReport {
     capture_report: Option<CaptureReport>
 }
 
-use futures::stream::SelectAll;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
-
 pub struct DetectorManager {
-    streams: Arc<Mutex<SelectAll<ReceiverStream<DetectorStatus>>>>,
+    pub detectors: Vec<DetectorController>
 }
 
 impl DetectorManager {
     pub async fn new() -> Self {
         let cameras = SLDevice::scan_cameras().unwrap();
-        // let mut detectors = HashMap::new();
-
-        let mut streams = SelectAll::<ReceiverStream<DetectorStatus>>::new();
+        let mut detectors = Vec::new();
 
         for device_info in cameras {
             let (tx, rx) = mpsc::channel(10);
             let controller = DetectorController::new_from_device_info(device_info, tx).await;
-            streams.push(ReceiverStream::new(rx));
+            detectors.push(controller);
         }
 
-        let streams =  Arc::new(Mutex::new(streams));
-        {
-            let streams = streams.clone();
-            tauri::async_runtime::spawn(async move {
-                let mut streams = streams.lock().await;
-                while let Some(message) = streams.next().await {
-                    println!("Received: {:?}", message);
-                    // Handle the message
-                }
-            });
-        }
 
         DetectorManager {
-            streams
+            detectors
         }
 
         // for device_info in cameras {
@@ -371,17 +355,36 @@ impl DetectorManager {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use tokio::sync::mpsc::channel;
-
-    use wrapper::DeviceInterface;
-
+    use wrapper::{DeviceInterface, ROI};
+    use crate::capture::{capture::{Capture, CaptureSettings}, capture_modes::SequenceCaptureInit};
     use super::DetectorController;
 
     #[tokio::test]
     async fn test_controller() {
         let (tx, rx) = channel(10);
-        let detector_controller = DetectorController::new_from_interface(DeviceInterface::EIO_USB, tx).await;
+        let detector_controller = DetectorController::new_from_interface(DeviceInterface::USB, tx).await;
+        let capture_settings = CaptureSettings {
+            dds_on: false,
+            test_mode: true,
 
-        loop {}
+            full_well_mode: wrapper::FullWellModes::High,
+            roi: ROI::default(),
+            timeout: Duration::from_secs(1)
+        };
+        
+        let sequence = SequenceCaptureInit {
+            capture_settings,
+            frame_count: 10,
+            exposure_time: Duration::from_millis(100)
+        };
+
+        let mut capture = Capture::new(sequence);
+        let capture = capture.as_mut();
+        detector_controller.run_capture(capture).await;
+
+        // loop {}
     }
 }
