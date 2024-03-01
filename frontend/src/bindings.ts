@@ -3,22 +3,6 @@
          export const commands = {
 async init() : Promise<null> {
 return await TAURI_INVOKE("plugin:tauri-specta|init");
-},
-async test() : Promise<__Result__<null, { uuid: string; len: number; _marker: null }>> {
-try {
-    return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|test") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async runCapture(detectorId: string, capture: CaptureMode) : Promise<__Result__<null, null>> {
-try {
-    return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|run_capture", { detectorId, capture }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
 }
 }
 
@@ -26,13 +10,7 @@ try {
 
 /** user-defined types **/
 
-export type CaptureMode = { Stream: StreamCapture } | { Sequence: SequenceCapture }
-export type CaptureSettings = { dds_on: boolean; full_well_mode: FullWellModes; roi: ROI; test_mode: boolean; timeout: Duration }
-export type Duration = { secs: number; nanos: number }
-export type FullWellModes = "Low" | "High" | "Unknown"
-export type ROI = { x: number; y: number; w: number; h: number }
-export type SequenceCapture = { acquisition_settings: CaptureSettings; num_frames: number; exposure_time: Duration }
-export type StreamCapture = { capture_settings: CaptureSettings; stream_time: Duration | null }
+
 
 /** tauri-specta globals **/
 

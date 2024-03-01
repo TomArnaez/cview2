@@ -1,19 +1,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 use log::info;
-use serde::Serialize;
-use specta::Type;
 use tauri::async_runtime::block_on;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use wrapper::{scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI};
 use uuid::Uuid;
 
-use super::{capture::{Capture, CaptureCommand, CaptureReport, CaptureResponse, DynCapture}, error::DetectorControllerError};
+use super::{capture::{Capture, CaptureCommand, DynCapture}, error::DetectorControllerError, report::CaptureReportUpdate};
 
 const HEARTBEAT_PERIOD: Duration = Duration::from_millis(500);
 
 enum DetectorMessage {
-    AcquireImage(&'static mut [u16], Option<Duration>, oneshot::Sender<Result<SLBufferInfo, SLError>>),
+    AcquireImage(Arc<std::sync::Mutex<[u16]>>, Option<Duration>, oneshot::Sender<Result<SLBufferInfo, SLError>>),
     CloseCamera(oneshot::Sender<Result<(), SLError>>),
     GetImageDims(oneshot::Sender<Result<(u32, u32), SLError>>),
     IsConnected(oneshot::Sender<bool>),
@@ -38,7 +36,10 @@ impl DetectorActor {
     async fn run(mut self, mut receiver: mpsc::Receiver<DetectorMessage>) {
         while let Some(message) = receiver.recv().await {
             match message {
-                DetectorMessage::AcquireImage(buffer, timeout, sender) => sender.send(self.detector.acquire_image(buffer, timeout)).unwrap(),
+                DetectorMessage::AcquireImage(buffer, timeout, sender) => sender.send({
+                    let mut lock = buffer.lock().unwrap();
+                    self.detector.acquire_image(lock.as_mut(), timeout) }
+                ).unwrap(),
                 DetectorMessage::GetImageDims(sender) => sender.send(self.detector.get_image_dims()).unwrap(),
                 DetectorMessage::IsConnected(sender) => sender.send(self.detector.is_connected()).unwrap(), 
                 DetectorMessage::OpenCamera(sender) => sender.send(self.detector.open_camera()).unwrap(),
@@ -128,7 +129,7 @@ impl DetectorCaptureHandle {
         }
     }
 
-    pub async fn acquire_image(&self, buffer: &'static mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
+    pub async fn acquire_image(&self, buffer: Arc<std::sync::Mutex<[u16]>>, timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
         let (resp_sender, resp_receiver) = oneshot::channel();
         let _ = self.sender.send(DetectorMessage::AcquireImage(buffer, timeout, resp_sender)).await;
         resp_receiver.await.expect("Actor task has been killed")
@@ -208,6 +209,7 @@ pub struct DetectorController {
     heartbeat_handle: tauri::async_runtime::JoinHandle<()>,
     inner: Arc<Mutex<DetectorControllerInner>>,
     status_tx: mpsc::Sender<DetectorStatus>,
+    capture_cmd_tx: Option<watch::Sender<CaptureCommand>>,
 }
 
 impl DetectorController {
@@ -258,7 +260,7 @@ impl DetectorController {
                             }
                         }
                     }
-                    status_tx.send(inner_lock.detector_status.clone()).await.unwrap();
+                    //status_tx.send(inner_lock.detector_status.clone()).await.unwrap();
                     std::thread::sleep(HEARTBEAT_PERIOD)
                 }
             })
@@ -268,11 +270,14 @@ impl DetectorController {
             detector_handle,
             heartbeat_handle,
             inner,
-            status_tx
+            status_tx,
+            capture_cmd_tx: None,
         }
     }
 
-    pub async fn run_capture<T: DynCapture>(&self, capture: &mut T) -> Result<(), DetectorControllerError> {
+    pub async fn run_capture<T: DynCapture + 'static>(&mut self, mut capture: T) -> Result<mpsc::Receiver<CaptureReportUpdate>, DetectorControllerError> 
+    where
+    {
         let mut inner_lock = self.inner.lock().await;
         match inner_lock.detector_status {
             DetectorStatus::Disconnected => return Err(DetectorControllerError::DetectorDisconnected),
@@ -282,20 +287,25 @@ impl DetectorController {
                 let (command_tx, command_rx) = watch::channel::<CaptureCommand>(CaptureCommand::Cancel);
                 let (report_tx, report_rx) = mpsc::channel(10);
                 let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
-                capture.run(detector_capture_handle, command_rx, report_tx).await;
+                tauri::async_runtime::spawn(async move {
+                    capture.run(detector_capture_handle, command_rx, report_tx).await;
+                });
+                self.capture_cmd_tx = Some(command_tx);
         
-                Ok(())
+                Ok(report_rx)
             },
         }
-
     }
-}
 
-
-#[derive(Debug, Clone, Serialize, Type)]
-struct DetectorReport {
-    uuid: Uuid,
-    capture_report: Option<CaptureReport>
+    pub async fn cancel_capture(&mut self) {
+        let inner_lock = self.inner.lock().await;
+        match inner_lock.detector_status {
+            DetectorStatus::Capturing => {
+                self.capture_cmd_tx.as_mut().unwrap().send(CaptureCommand::Cancel).unwrap();
+            },
+            _ => {}
+        }
+    }
 }
 
 pub struct DetectorManager {
@@ -313,43 +323,9 @@ impl DetectorManager {
             detectors.push(controller);
         }
 
-
         DetectorManager {
             detectors
         }
-
-        // for device_info in cameras {
-        //     let (tx, rx) = mpsc::channel(10);
-        //     let controller = DetectorController::new_from_device_info(device_info, tx).await;
-        //     let uuid = Uuid::new_v4();
-        //     detectors.insert(uuid, DetectorState {
-        //         uuid,
-        //         controller,
-        //         detector_rx: rx,
-        //         capture_rx: None
-        //     });
-        // }
-
-        // let detectors_mutex = Arc::new(std::sync::Mutex::new(detectors));
-
-        // {
-        //     let detector_mutex = detectors_mutex.clone();
-        //     tokio::spawn(async move {
-        //         let mut streams = Vec::new();
-                
-        //         // Lock the mutex and access the detectors HashMap
-        //         let detectors = detector_mutex.lock().unwrap();
-        //         for (_uuid, detector_state) in detectors.iter() {
-        //             let detector_rx_stream = tokio_stream::wrappers::ReceiverStream::new(detector_state.detector_rx);
-        //             streams.push(detector_rx_stream);
-        //         }
-
-        //     });
-        // }
-
-        // DetectorManager {
-        //     detectors: detectors_mutex
-        // }
     }
 }
 
@@ -364,8 +340,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_controller() {
+        let _ = env_logger::try_init();
+
         let (tx, rx) = channel(10);
-        let detector_controller = DetectorController::new_from_interface(DeviceInterface::USB, tx).await;
+        let mut detector_controller = DetectorController::new_from_interface(DeviceInterface::USB, tx).await;
         let capture_settings = CaptureSettings {
             dds_on: false,
             test_mode: true,
@@ -381,10 +359,16 @@ mod tests {
             exposure_time: Duration::from_millis(100)
         };
 
-        let mut capture = Capture::new(sequence);
-        let capture = capture.as_mut();
-        detector_controller.run_capture(capture).await;
+        let capture = Capture::new(sequence);
+        let mut events_tx = detector_controller.run_capture(capture).await.unwrap();
 
-        // loop {}
+        while let Some(msg) = events_tx.recv().await {
+            match msg {
+                crate::capture::report::CaptureReportUpdate::CompletedTaskCount(frame) => {
+                    detector_controller.cancel_capture().await;
+                },
+                _ => {}
+            }
+        }
     }
 }

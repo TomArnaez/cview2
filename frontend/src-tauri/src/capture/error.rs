@@ -7,6 +7,8 @@ pub enum DetectorControllerError {
     CaptureInProgress,
     #[error("Detector disconnected")]
     DetectorDisconnected,
+    #[error("No capture in progress")]
+    NoCaptureInProgress
 }
 
 #[derive(Error, Debug)]

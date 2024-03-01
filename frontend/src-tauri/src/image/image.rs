@@ -1,39 +1,21 @@
-use std::{mem::size_of, sync::mpsc::Sender};
-use image::{imageops, ImageBuffer, Pixel, PixelWithColorType};
+use std::mem::size_of;
+use image::{imageops, ColorType, ImageBuffer, Pixel, PixelWithColorType};
 use specta::Type;
 use tauri::AppHandle;
 use uuid::Uuid;
-
 use crate::shared_buffer::{HasTypeTag, SharedBuffer};
-
 use super::image_commands::Command;
-
-#[derive(Copy, Clone)]
-enum PixelType {
-    U32,
-    U16
-}
-
-trait PixelWrappedTrait {
-    fn channels(&self);
-}
-
-impl<T: Pixel> PixelWrappedTrait for T {
-    fn channels(&self) {
-        self.channels();
-    }
-}
-
-#[derive(Debug, Type)]
-pub struct ImageReport {
-    id: Uuid,
-    width: u32,
-    height: u32,
-}
 
 pub enum FlipDirection {
     X,
     Y
+}
+
+#[derive(Debug, Type)]
+pub struct ImageDetails {
+    id: Uuid,
+    width: u32,
+    height: u32,
 }
 
 // Type erase the image pixel type
@@ -41,8 +23,10 @@ pub trait DynImage {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn execute_command(&mut self, command: Box<dyn Command>);
+    fn get_colour_type(&self) -> ColorType;
     fn undo(&mut self);
     fn flip(&mut self, direction: FlipDirection);
+    fn get_details(&self) -> ImageDetails;
 }
 
 pub struct ImageHandler<P: Pixel> 
@@ -51,7 +35,6 @@ where P::Subpixel : HasTypeTag
     pub data: ImageBuffer<P, SharedBuffer<P::Subpixel>>,
     commands: Vec<Box<dyn Command>>,
     id: Uuid,
-    tx: Sender<ImageReport>
 }
 
 impl<P: PixelWithColorType> DynImage for ImageHandler<P>
@@ -64,6 +47,10 @@ where
 
     fn height(&self) -> u32 {
         self.data.height()
+    }
+
+    fn get_colour_type(&self) -> ColorType {
+        P::COLOR_TYPE
     }
 
     fn execute_command(&mut self, command: Box<dyn Command>) {
@@ -81,18 +68,25 @@ where
             FlipDirection::Y => imageops::flip_vertical_in_place(&mut self.data),
         }
     }
+
+    fn get_details(&self) -> ImageDetails {
+        ImageDetails {
+            id: self.id,
+            width: self.data.width(),
+            height: self.data.height()
+        }
+    }
 }
 
 impl<P: PixelWithColorType> ImageHandler<P>
 where P::Subpixel : HasTypeTag + 'static
 {
-    pub fn new(id: Uuid, width: u32, height: u32, tx: Sender<ImageReport>, app: AppHandle) -> Self {
+    pub fn new(id: Uuid, width: u32, height: u32,app: AppHandle) -> Self {
         let buffer = SharedBuffer::<P::Subpixel>::new((width * height) as usize * size_of::<P::Subpixel>(), app);
 
         let image_handler = Self {
             data: ImageBuffer::from_raw(width, height, buffer).unwrap(),
             id,
-            tx,
             commands: Vec::new()
         };
 
