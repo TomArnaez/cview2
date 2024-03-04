@@ -1,16 +1,16 @@
 use log::error;
 use serde::{ser::SerializeStruct, Serialize};
 use specta::Type;
-use std:: ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut};
 use tauri::{AppHandle, Manager, Runtime};
 use windows_core::{ComInterface, HSTRING, PCWSTR};
 use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_19, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-#[derive(Serialize, Debug)] 
-enum TypeTag {
-    UInt16,
+#[derive(Clone, Serialize, Debug, Type)] 
+pub enum TypeTag {
+    U16,
 }
 
 pub trait HasTypeTag {
@@ -19,7 +19,7 @@ pub trait HasTypeTag {
 
 impl HasTypeTag for u16 {
     fn type_tag() -> TypeTag {
-        TypeTag::UInt16
+        TypeTag::U16
     }
 }
 
@@ -84,7 +84,7 @@ impl<T: HasTypeTag + 'static> SharedBuffer<T> {
                     uuid,
                     len,
                     shared_buffer,
-                    buffer: buffer as *mut T,
+                    buffer: buffer as *mut T
                 }) {
                     Err(_) => error!("Failed to send shared buffer"),
                     _ => {}
@@ -92,5 +92,13 @@ impl<T: HasTypeTag + 'static> SharedBuffer<T> {
             }).unwrap();
 
         rx.blocking_recv().unwrap()
+    }
+}
+
+impl<T: HasTypeTag + Clone + 'static> From<(&[T], AppHandle)> for SharedBuffer<T> where T: HasTypeTag {
+    fn from(item: (&[T], AppHandle)) -> Self {
+        let mut buffer = SharedBuffer::<T>::new(item.0.len(), item.1);
+        buffer.clone_from_slice(&item.0);
+        buffer
     }
 }

@@ -5,7 +5,6 @@ pub trait Command {
     fn undo(&self, image: &mut dyn DynImage);
 }
 
-
 impl Command for FlipDirection {
     fn execute(&self, image: &mut dyn DynImage) {
         match self {

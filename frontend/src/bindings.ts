@@ -3,14 +3,40 @@
          export const commands = {
 async init() : Promise<null> {
 return await TAURI_INVOKE("plugin:tauri-specta|init");
+},
+async deleteImage(idx: number) : Promise<__Result__<null, "ImageNotFound" | { ImageFileError: ImageFileError }>> {
+try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|delete_image", { idx }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async openImage(path: string) : Promise<__Result__<null, "ImageNotFound" | { ImageFileError: ImageFileError }>> {
+try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|open_image", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async testCmd() : Promise<null> {
+return await TAURI_INVOKE("plugin:tauri-specta|test_cmd");
 }
 }
 
-
+export const events = __makeEvents__<{
+imageManagerStateChanged: ImageManagerStateChanged
+}>({
+imageManagerStateChanged: "plugin:tauri-specta:image-manager-state-changed"
+})
 
 /** user-defined types **/
 
-
+export type ImageDetails = { id: string; width: number; height: number; buffer_type: TypeTag }
+export type ImageFileError = { CannotOpenFile: string } | "TIFFError" | "UnsupportedFormat"
+export type ImageManagerStateChanged = ImageDetails[]
+export type TypeTag = "U16"
 
 /** tauri-specta globals **/
 

@@ -1,3 +1,3 @@
 mod shared_buffer;
 
-pub use shared_buffer::{HasTypeTag, SharedBuffer};
+pub use shared_buffer::{HasTypeTag, SharedBuffer, TypeTag};

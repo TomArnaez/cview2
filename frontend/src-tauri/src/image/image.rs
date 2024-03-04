@@ -1,9 +1,10 @@
 use std::mem::size_of;
 use image::{imageops, ColorType, ImageBuffer, Pixel, PixelWithColorType};
+use serde::Serialize;
 use specta::Type;
 use tauri::AppHandle;
 use uuid::Uuid;
-use crate::shared_buffer::{HasTypeTag, SharedBuffer};
+use crate::shared_buffer::{HasTypeTag, SharedBuffer, TypeTag};
 use super::image_commands::Command;
 
 pub enum FlipDirection {
@@ -11,14 +12,14 @@ pub enum FlipDirection {
     Y
 }
 
-#[derive(Debug, Type)]
+#[derive(Clone, Debug, Serialize, Type)]
 pub struct ImageDetails {
     id: Uuid,
     width: u32,
     height: u32,
+    buffer_type: TypeTag
 }
 
-// Type erase the image pixel type
 pub trait DynImage {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
@@ -73,7 +74,8 @@ where
         ImageDetails {
             id: self.id,
             width: self.data.width(),
-            height: self.data.height()
+            height: self.data.height(),
+            buffer_type: P::Subpixel::type_tag()
         }
     }
 }
@@ -81,9 +83,7 @@ where
 impl<P: PixelWithColorType> ImageHandler<P>
 where P::Subpixel : HasTypeTag + 'static
 {
-    pub fn new(id: Uuid, width: u32, height: u32,app: AppHandle) -> Self {
-        let buffer = SharedBuffer::<P::Subpixel>::new((width * height) as usize * size_of::<P::Subpixel>(), app);
-
+    pub fn new(id: Uuid, buffer: SharedBuffer<P::Subpixel>, width: u32, height: u32, app: AppHandle) -> Self {
         let image_handler = Self {
             data: ImageBuffer::from_raw(width, height, buffer).unwrap(),
             id,

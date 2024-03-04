@@ -44,8 +44,6 @@ impl StatefulCapture for SequenceCaptureInit {
     }
 
     async fn execute_step(&self, step: &Self::Step, data: &mut Self::Data, events_tx: mpsc::Sender<CaptureReportUpdate>) {
-        println!("{}", step.frame);
-        sleep(Duration::from_secs(1)).await;
         events_tx.send(CaptureReportUpdate::CompletedTaskCount(step.frame)).await.unwrap();
     }
 
