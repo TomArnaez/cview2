@@ -1,25 +1,34 @@
 use std::path::PathBuf;
 use std::fs::File;
 use image::{Luma, PixelWithColorType};
-use tauri::{AppHandle, Manager};
-use uuid::Uuid;
-use crate::shared_buffer::{HasTypeTag, SharedBuffer};
-use super::{error::{ImageFileError, ImageManagerError}, image::{DynImage, ImageDetails, ImageHandler}};
+use tauri::AppHandle;
+use crate::shared_buffer::HasTypeTag;
+use super::{error::{ImageFileError, ImageManagerError}, image::{ImageHandler, TsImage}, view::ImageView};
 use tiff::decoder::{Decoder, DecodingResult};
 
-pub struct ImageManager {
-    images: Vec<Box<dyn DynImage>>,
-    app: AppHandle,
+pub struct ImageManager<'a> {
+    images: Vec<ImageHandler>,
+    views: Vec<ImageView<'a>>
 }
 
-impl ImageManager {
+impl<'a> ImageManager<'a> {
     pub fn new(app: AppHandle) -> Self {
         let manager = Self {
             images: Vec::new(),
-            app
+            views: Vec::new()
         };
         manager.emit_state();
         manager 
+    }
+
+    pub fn list_all_images(&self) -> Vec<TsImage> {
+        self.images.iter().map(|img| {
+            TsImage {
+                id: img.get_id(),
+                width: img.get_width(),
+                height: img.get_height()
+            }
+        }).collect()
     }
 
     pub fn add_from_file(&mut self, path: PathBuf) -> Result<(), ImageManagerError> {
@@ -42,7 +51,7 @@ impl ImageManager {
         P: PixelWithColorType + 'static,
         P::Subpixel: HasTypeTag + 'static
     {
-        self.images.push(Box::new(ImageHandler::<P>::new(Uuid::new_v4(), SharedBuffer::from((image, self.app.clone())), width, height, self.app.clone())));
+        //self.images.push(Box::new(ImageHandler::<P>::new(Uuid::new_v4(), SharedBuffer::from((image, self.app.clone())), width, height, self.app.clone())));
         self.emit_state();
     }
 
@@ -53,9 +62,9 @@ impl ImageManager {
     }
 
     fn emit_state(&self) {
-        self.app.emit("image-manager-state-changed", self.images.iter().map(|image| image.get_details()).collect::<Vec<ImageDetails>>()).unwrap();
+        //self.app.emit("image-manager-state-changed", self.images.iter().map(|image| image.get_details()).collect::<Vec<ImageDetails>>()).unwrap();
         //ImageManagerStateChanged(self.images.iter().map(|image| image.get_details()).collect()).emit_all(&self.app).unwrap();
     }
 }
 
-unsafe impl Send for ImageManager {}
+unsafe impl<'a> Send for ImageManager<'a> {}

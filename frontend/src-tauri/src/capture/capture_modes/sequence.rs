@@ -1,5 +1,5 @@
 use std::time::Duration;
-use tokio::{sync::mpsc, time::sleep};
+use tokio::sync::mpsc;
 use wrapper::{ExposureModes, SLImage};
 use crate::capture::{capture::{CaptureSettings, JobInitOutput, StatefulCapture}, detector::DetectorCaptureHandle, error::JobError, report::CaptureReportUpdate};
 

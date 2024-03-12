@@ -10,16 +10,30 @@ use uuid::Uuid;
 
 #[derive(Clone, Serialize, Debug, Type)] 
 pub enum TypeTag {
+    U8,
     U16,
+    U32,
 }
 
 pub trait HasTypeTag {
     fn type_tag() -> TypeTag;
 }
 
+impl HasTypeTag for u8 {
+    fn type_tag() -> TypeTag {
+        TypeTag::U8
+    }
+}
+
 impl HasTypeTag for u16 {
     fn type_tag() -> TypeTag {
         TypeTag::U16
+    }
+}
+
+impl HasTypeTag for u32 {
+    fn type_tag() -> TypeTag {
+        TypeTag::U32
     }
 }
 

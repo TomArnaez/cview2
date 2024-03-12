@@ -5,7 +5,6 @@ use uuid::Uuid;
 pub enum CaptureReportUpdate {
     TaskCount(usize),
     CompletedTaskCount(usize),
-    Message(String),
 }
 
 #[derive(Debug, Type, Clone)]

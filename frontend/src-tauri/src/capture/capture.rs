@@ -177,7 +177,6 @@ async fn handle_single_step(
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum CaptureType {
     Stream(StreamCapture),
@@ -190,7 +189,7 @@ pub enum CaptureCommand {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type)]
 pub struct CaptureSettings {
-    pub dds_on: bool,
+    pub dds: bool,
     pub full_well_mode: FullWellModes,
     pub roi: ROI,
     pub test_mode: bool,

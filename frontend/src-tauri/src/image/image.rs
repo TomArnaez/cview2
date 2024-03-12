@@ -1,95 +1,70 @@
-use std::mem::size_of;
-use image::{imageops, ColorType, ImageBuffer, Pixel, PixelWithColorType};
+use image::{ImageBuffer, Luma};
 use serde::Serialize;
 use specta::Type;
-use tauri::AppHandle;
 use uuid::Uuid;
-use crate::shared_buffer::{HasTypeTag, SharedBuffer, TypeTag};
-use super::image_commands::Command;
 
-pub enum FlipDirection {
-    X,
-    Y
+// Typescript representation of an image
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct TsImage {
+    pub id: Uuid,
+    pub width: u32,
+    pub height: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+pub enum ImageVariant {
+    ImageU16(ImageU16),
+}
+
+pub struct ImageU16 {
+    pub buffer: ImageBuffer<Luma<u16>, Vec<u16>>,
+}
+
+pub struct ImageU32 {
+    buffer: ImageBuffer<Luma<u32>, Vec<u32>>,
+}
+
+pub struct ImageHandler {
+    id: Uuid,
+    image: ImageVariant,
+}
+
+impl ImageHandler {
+    pub fn new(image: ImageVariant) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            image
+        }
+    }
+
+    pub fn get_id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn get_image(&self) -> &ImageVariant {
+        &self.image
+    }
+
+    pub fn get_image_mut(&mut self) -> &mut ImageVariant {
+        &mut self.image
+    }
+
+    pub fn get_width(&self) -> u32 {
+        match &self.image {
+            ImageVariant::ImageU16(img) => img.buffer.width(),
+            //ImageVariant::ImageU32(img) => img.buffer.width(),
+        }
+    }
+
+    pub fn get_height(&self) -> u32 {
+        match &self.image {
+            ImageVariant::ImageU16(img) => img.buffer.height(),
+            //ImageVariant::ImageU32(img) => img.buffer.height(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
 pub struct ImageDetails {
-    id: Uuid,
     width: u32,
-    height: u32,
-    buffer_type: TypeTag
-}
-
-pub trait DynImage {
-    fn width(&self) -> u32;
-    fn height(&self) -> u32;
-    fn execute_command(&mut self, command: Box<dyn Command>);
-    fn get_colour_type(&self) -> ColorType;
-    fn undo(&mut self);
-    fn flip(&mut self, direction: FlipDirection);
-    fn get_details(&self) -> ImageDetails;
-}
-
-pub struct ImageHandler<P: Pixel> 
-where P::Subpixel : HasTypeTag
-{
-    pub data: ImageBuffer<P, SharedBuffer<P::Subpixel>>,
-    commands: Vec<Box<dyn Command>>,
-    id: Uuid,
-}
-
-impl<P: PixelWithColorType> DynImage for ImageHandler<P>
-where
-    P::Subpixel: HasTypeTag,
-{
-    fn width(&self) -> u32 {
-        self.data.width()
-    }
-
-    fn height(&self) -> u32 {
-        self.data.height()
-    }
-
-    fn get_colour_type(&self) -> ColorType {
-        P::COLOR_TYPE
-    }
-
-    fn execute_command(&mut self, command: Box<dyn Command>) {
-        command.execute(self);
-        self.commands.push(command);
-    }
-
-    fn undo(&mut self) {
-        
-    }
-
-    fn flip(&mut self, direction: FlipDirection) {
-        match direction {
-            FlipDirection::X => imageops::flip_horizontal_in_place(&mut self.data),
-            FlipDirection::Y => imageops::flip_vertical_in_place(&mut self.data),
-        }
-    }
-
-    fn get_details(&self) -> ImageDetails {
-        ImageDetails {
-            id: self.id,
-            width: self.data.width(),
-            height: self.data.height(),
-            buffer_type: P::Subpixel::type_tag()
-        }
-    }
-}
-
-impl<P: PixelWithColorType> ImageHandler<P>
-where P::Subpixel : HasTypeTag + 'static
-{
-    pub fn new(id: Uuid, buffer: SharedBuffer<P::Subpixel>, width: u32, height: u32, app: AppHandle) -> Self {
-        let image_handler = Self {
-            data: ImageBuffer::from_raw(width, height, buffer).unwrap(),
-            id,
-            commands: Vec::new()
-        };
-
-        image_handler
-    }
+    height: u32
 }
