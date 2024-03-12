@@ -26,6 +26,8 @@ impl StatefulCapture for SequenceCaptureInit {
     type Step = SequenceCaptureStep;
     type Result = Vec<SLImage>;
 
+    const NAME: &'static str = "Sequence Capture";
+
     async fn init(&self, detector_handle: DetectorCaptureHandle) -> Result<JobInitOutput<Self::Step, Self::Data>, JobError> {
         configure_device_for_capture(detector_handle.clone(), self.capture_settings).await?;
 

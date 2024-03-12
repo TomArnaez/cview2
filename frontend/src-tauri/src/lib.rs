@@ -7,6 +7,7 @@ mod capture;
 mod event;
 mod image;
 mod shared_buffer;
+mod task;
 
 use crate::{capture::{list_all_detectors, DetectorManager}, 
     image::{list_all_images, save_image_as_bitmap, save_image_as_tiff, ImageManager}};
