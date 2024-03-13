@@ -2,14 +2,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use log::{error, info};
 use serde::Serialize;
-use tauri::{async_runtime::block_on, App, AppHandle};
+use tauri::{async_runtime::block_on, AppHandle};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use wrapper::{scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI};
 use uuid::Uuid;
 
-use crate::event::{self, Event};
+use crate::{capture::{error::JobError, report::CaptureStatus}, event::{self, Event}};
 
-use super::{capture::{Capture, CaptureCommand, DynCapture}, error::DetectorControllerError, report::CaptureReportUpdate};
+use super::{capture::{Capture, CaptureCommand, DynCapture}, error::DetectorControllerError, report::{CaptureReport, CaptureReportUpdate}};
 
 const HEARTBEAT_PERIOD: Duration = Duration::from_millis(500);
 
@@ -201,6 +201,7 @@ pub enum DetectorStatus {
 #[derive(Debug)]
 pub struct DetectorControllerInner {
     detector_status: DetectorStatus,
+    capture_report: Option<CaptureReport>
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -226,6 +227,13 @@ pub struct DetectorService {
     inner: Arc<Mutex<DetectorControllerInner>>,
     status_tx: mpsc::Sender<DetectorStatus>,
     capture_cmd_tx: Option<watch::Sender<CaptureCommand>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CaptureProgressEvent {
+    pub task_count: usize,
+    pub completed_task_count: usize,
+    pub message: String,
 }
 
 impl DetectorService {
@@ -255,6 +263,7 @@ impl DetectorService {
 
         let inner = Arc::new(Mutex::new(DetectorControllerInner {
             detector_status,
+            capture_report: None
         }));
 
         let heartbeat_handle = {
@@ -302,27 +311,49 @@ impl DetectorService {
         }
     }
 
-    pub async fn run_capture<T: DynCapture + 'static>(&mut self, mut capture: T) -> Result<mpsc::Receiver<CaptureReportUpdate>, DetectorControllerError> 
-    where
-    {
+    pub async fn run_capture<T: DynCapture + 'static>(&mut self, app: AppHandle, mut capture: T) -> Result<(), DetectorControllerError> {
         let mut inner_lock = self.inner.lock().await;
         match inner_lock.detector_status {
             DetectorStatus::Disconnected => return Err(DetectorControllerError::DetectorDisconnected),
             DetectorStatus::Capturing => return Err(DetectorControllerError::CaptureInProgress),
             DetectorStatus::Idle => {
                 inner_lock.detector_status = DetectorStatus::Capturing;
-                let (command_tx, command_rx) = watch::channel::<CaptureCommand>(CaptureCommand::Cancel);
-                let (report_tx, report_rx) = mpsc::channel(10);
                 let detector_capture_handle = DetectorCaptureHandle::new(self.detector_handle.clone());
+
+                let (command_tx, command_rx) = watch::channel::<CaptureCommand>(CaptureCommand::Cancel);
+                let (report_tx, mut report_rx) = mpsc::channel(10);
                 tauri::async_runtime::spawn(async move {
-                    capture.run(detector_capture_handle, command_rx, report_tx).await;
+                    let mut report = capture.report_mut().clone();
+
+                    tokio::select! {
+                        Some(report_update) = report_rx.recv() => {
+                            Self::handle_capture_progresss(app.clone(), &mut report, report_update);
+                        },
+                        capture_output = capture.run(detector_capture_handle, command_rx, report_tx) => {
+                            match capture_output {
+                                Ok(_) => {
+                                    report.status = CaptureStatus::Completed;
+                                },
+                                Err(JobError::Canceled) => report.status = CaptureStatus::Canceled,
+                                Err(e) => {
+                                    error!(
+                                        "Job<id='{}', name='{}'> failed with error: {e:#?};",
+                                        report.id, report.name
+                                    );
+                                    report.status = CaptureStatus::Failed;
+                                }
+                            }
+                        }
+                    }
                 });
+
                 self.capture_cmd_tx = Some(command_tx);
         
-                Ok(report_rx)
+                Ok(())
             },
         }
     }
+
 
     pub async fn cancel_capture(&mut self) {
         let inner_lock = self.inner.lock().await;
@@ -332,6 +363,23 @@ impl DetectorService {
             },
             _ => {}
         }
+    }
+
+    fn handle_capture_progresss(app: AppHandle, report: &mut CaptureReport, update: CaptureReportUpdate) {
+        match update {
+            CaptureReportUpdate::TaskCount(task_count) => {
+                report.task_count = task_count;
+            },
+            CaptureReportUpdate::CompletedTaskCount(completed_task_count) => {
+                report.completed_task_count = completed_task_count;
+            }
+        }
+
+        event::send(app, &Event::capture_progress(CaptureProgressEvent { 
+            completed_task_count: report.completed_task_count, 
+            task_count: report.task_count,
+            message: "TBC".to_owned()
+        })).unwrap();
     }
 }
 

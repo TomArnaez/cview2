@@ -14,7 +14,7 @@ pub enum DetectorControllerError {
 #[derive(Error, Debug)]
 pub enum JobError {
     #[error("Capture cancelled")]
-    Cancelled,
+    Canceled,
     #[error("critical job error: {0}")]
 	Critical(&'static str),
     #[error("Internal SDK Error")]

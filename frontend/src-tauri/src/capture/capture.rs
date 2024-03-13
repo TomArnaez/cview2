@@ -2,15 +2,15 @@ use std::{collections::VecDeque, sync::Arc, time::Duration};
 use log::info;
 use specta::Type;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::{mpsc, watch, Mutex}};
+use tokio::sync::{mpsc, watch, Mutex};
 use uuid::Uuid;
-use wrapper::{ExposureModes, FullWellModes, SLBufferInfo, SLError, SLImage, ROI};
+use wrapper::{FullWellModes, ROI};
 use tauri::async_runtime::JoinHandle;
-use super::{detector::DetectorCaptureHandle, error::JobError, report::{CaptureReport, CaptureReportUpdate}};
+use super::{detector::DetectorCaptureHandle, error::JobError, report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate}};
 
 pub struct Capture<Capture: StatefulCapture> {
     id: Uuid,
-    report: Option<CaptureReport>,
+    report: CaptureReport,
     state: Option<CaptureState<Capture>>
 }
 
@@ -22,14 +22,15 @@ impl <SJob: StatefulCapture> Capture<SJob> {
 
 pub struct CaptureBuilder<SJob: StatefulCapture> {
     id: Uuid,
-    init: SJob
+    init: SJob,
+    report_builder: CaptureReportBuilder
 }
 
 impl<SJob: StatefulCapture> CaptureBuilder<SJob> {
     pub fn build(self) -> Capture<SJob> {
         Capture::<SJob> {
             id: self.id,
-            report: None,
+            report: self.report_builder.build(),
             state: Some(CaptureState {
                 data: None,
                 init: self.init,
@@ -44,6 +45,7 @@ impl<SJob: StatefulCapture> CaptureBuilder<SJob> {
 		Self {
 			id,
 			init,
+            report_builder: CaptureReportBuilder::new(id, SJob::NAME.to_string())
 		}
     }
 }
@@ -61,6 +63,8 @@ pub trait StatefulCapture: Send + Sync + 'static {
     type Step: Send + Sync;
     type Result;
 
+    const NAME: &'static str;
+
     async fn init(&self, detector_handle: DetectorCaptureHandle) -> Result<JobInitOutput<Self::Step, Self::Data>, JobError>;
     async fn execute_step(&self, step: &Self::Step, data: &mut Self::Data, events_tx: mpsc::Sender<CaptureReportUpdate>);
     async fn finalise(&self, data: Self::Data) -> Self::Result;
@@ -69,7 +73,8 @@ pub trait StatefulCapture: Send + Sync + 'static {
 #[async_trait::async_trait]
 pub trait DynCapture: Send + Sync {
     fn id(&self) -> Uuid;
-    fn report(&self) -> &Option<CaptureReport>;
+    fn report(&self) -> &CaptureReport;
+    fn report_mut(&mut self) -> &mut CaptureReport;
     async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: watch::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>) -> Result<(), JobError>;
 }
 
@@ -79,15 +84,19 @@ impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
         self.id
     }
 
-    fn report(&self) -> &Option<CaptureReport> {
+    fn report(&self) -> &CaptureReport {
         &self.report
+    }
+
+    fn report_mut(&mut self) -> &mut CaptureReport {
+        &mut self.report
     }
 
     async fn run(&mut self, detector_handle: DetectorCaptureHandle, rx: watch::Receiver<CaptureCommand>, events_tx: mpsc::Sender<CaptureReportUpdate>) -> Result<(), JobError> {
         let id = self.id();
         info!("Starting capture <id={id}>");
 
-        let CaptureState { init, data, mut steps, mut step_number} = self.state.take().expect("criticla error: missing capture state");
+        let CaptureState { init, data, mut steps, mut step_number} = self.state.take().expect("critical error: missing capture state");
 
         let stateful_job = Arc::new(init);
         let working_data = Arc::new(Mutex::new(data));

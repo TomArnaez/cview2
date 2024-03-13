@@ -1,7 +1,8 @@
 use log::info;
 use tauri::{AppHandle, Manager};
+use uuid::Uuid;
 
-use crate::capture::DetectorStatus;
+use crate::capture::{CaptureProgressEvent, DetectorStatus};
 
 pub fn send(app: AppHandle, event: &Event) -> Result<(), ()> {
     info!("Sending event {:?}", event.name());
@@ -20,6 +21,20 @@ impl Event {
         &self.name
     }
 
+    pub fn detector_capture_progress(detector_id: Uuid, capture_progress_event: CaptureProgressEvent) -> Event {
+        Event {
+            name: format!("detector://{}//capture-progress", detector_id),
+            payload: serde_json::json!(capture_progress_event)
+        }
+    }
+
+    pub fn detector_status_change(detector_id: Uuid, status: DetectorStatus) -> Event {
+        Event {
+            name: format!("detector://{}/status-changed", detector_id),
+            payload: serde_json::json!(status)
+        }
+    }
+
     pub fn new_detector_connected() -> Event {
         Event {
             name: "new-detector-connected".to_owned(),
@@ -27,10 +42,4 @@ impl Event {
         }
     }
 
-    pub fn detector_status_change(status: DetectorStatus) -> Event {
-        Event {
-            name: "detector-status-changed".to_owned(),
-            payload: serde_json::json!(status)
-        }
-    }
 }
