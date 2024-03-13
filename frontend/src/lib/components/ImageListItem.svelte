@@ -3,3 +3,5 @@
 
     export let image: ImageDetails;
 </script>
+
+Hi

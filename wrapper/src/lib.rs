@@ -179,11 +179,6 @@ mod sldevice_ffi {
         type SLBufferInfo = crate::SLBufferInfo;
         type ROIinfo = crate::ROI;
 
-        #[rust_name="constuct_sldevice_with_interface"]
-        #[namespace="SLBindings"]
-        pub fn construct(device_interface: DeviceInterface) -> Result<UniquePtr<SLDevice>>;
-        #[namespace="SLBindings"]
-        pub fn construct_sldevice_from_devinfo(device_info: SLDeviceInfo) -> Result<UniquePtr<SLDevice>>;
         unsafe fn AcquireImage(self: Pin<&mut SLDevice>, buffer: *mut u16, timeout_ms: u32) -> SLBufferInfo;
         fn SetExposureTime(self: Pin<&mut SLDevice>, exposure_time_ms: i32) -> SLError;
         fn SetExposureMode(self: Pin<&mut SLDevice>, exposure_mode: ExposureModes) -> SLError;
@@ -204,6 +199,12 @@ mod sldevice_ffi {
         fn SetTestMode(self: Pin<&mut SLDevice>, test_mode_on: bool) -> SLError;
         fn SetDDS(self: Pin<&mut SLDevice>, dds_on: bool) -> SLError;
         fn SetFullWell(self: Pin<&mut SLDevice>, full_well_mode: FullWellModes) -> SLError;
+
+        #[rust_name="constuct_sldevice_with_interface"]
+        #[namespace="SLBindings"]
+        pub fn construct(device_interface: DeviceInterface) -> Result<UniquePtr<SLDevice>>;
+        #[namespace="SLBindings"]
+        pub fn construct_sldevice_from_devinfo(device_info: SLDeviceInfo) -> Result<UniquePtr<SLDevice>>;
         #[namespace="SLBindings"]
         fn get_device_info(device: Pin<&mut SLDevice>) -> SLDeviceInfo;
         #[namespace="SLBindings"]

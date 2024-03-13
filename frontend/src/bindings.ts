@@ -19,9 +19,6 @@ try {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
-},
-async testCmd() : Promise<null> {
-return await TAURI_INVOKE("plugin:tauri-specta|test_cmd");
 }
 }
 
@@ -33,10 +30,9 @@ imageManagerStateChanged: "plugin:tauri-specta:image-manager-state-changed"
 
 /** user-defined types **/
 
-export type ImageDetails = { id: string; width: number; height: number; buffer_type: TypeTag }
+export type ImageDetails = { width: number; height: number }
 export type ImageFileError = { CannotOpenFile: string } | "TIFFError" | "UnsupportedFormat"
 export type ImageManagerStateChanged = ImageDetails[]
-export type TypeTag = "U16"
 
 /** tauri-specta globals **/
 

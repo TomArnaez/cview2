@@ -1,8 +1,8 @@
 <script lang="ts">
     import Konva from 'konva';
     import { onMount } from "svelte";
-    import { selectedImage } from "../../stores/imageStore";
-    import { convertImageToRGBACanvas } from "../../utils/canvasUtils";
+
+    export let imageData: ImageData;
 
     let stage: Konva.Stage;
     let layer: Konva.Layer;
@@ -23,38 +23,42 @@
         
         layer = new Konva.Layer();
         stage.add(layer);
+
+        // Initial draw or setup if needed
+        if (imageData) {
+            drawImageData(imageData);
+        }
     });
 
-    // Reactive statement to handle selectedImage changes
-    $: {
-        if (stage && $selectedImage) {
-            convertImageToRGBACanvas($selectedImage).match(
-                (canvas) => {
-                    enableInteraction();
-                    updateBackgroundImage(canvas);
-                },
-                (error) => {
-                    console.log(error);
+    $: imageData, drawImageData(imageData);
+
+    function drawImageData(imageData: ImageData) {
+        if (!stage || !imageData) return;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = imageData.width;
+        canvas.height = imageData.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.putImageData(imageData, 0, 0);
+            const image = new Image();
+            image.onload = () => {
+                if (!background) {
+                    background = new Konva.Image({
+                        image: image,
+                        x: 0,
+                        y: 0,
+                        width: stageWidth,
+                        height: stageHeight,
+                    });
+                    layer.add(background);
+                } else {
+                    background.image(image);
                 }
-            );
-        } else if (stage) {
-            disableInteraction();
-            clearBackgroundImage();
+                layer.batchDraw();
+            };
+            image.src = canvas.toDataURL();
         }
-    }
-
-    function updateBackgroundImage(canvas: HTMLCanvasElement) {
-        const image = new Image();
-        image.onload = () => {
-            background.image(image);
-            layer.draw();
-        };
-        image.src = canvas.toDataURL();
-    }
-
-    function clearBackgroundImage() {
-        //background.image(null);
-        layer.draw();
     }
 
     function enableInteraction() {
