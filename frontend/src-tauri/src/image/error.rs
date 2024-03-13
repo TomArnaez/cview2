@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use serde::Serialize;
 use specta::Type;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Serialize, Debug, Type)]
@@ -9,7 +9,7 @@ pub enum ImageManagerError {
     ImageNotFound,
 
     #[error("image file error")]
-    ImageFileError(ImageFileError)
+    ImageFileError(ImageFileError),
 }
 
 #[derive(Debug, Error, Serialize, Type)]
@@ -19,5 +19,5 @@ pub enum ImageFileError {
     #[error("TIFF error")]
     TIFFError,
     #[error("Unsupported format")]
-    UnsupportedFormat
+    UnsupportedFormat,
 }

@@ -1,10 +1,12 @@
+use super::{
+    error::RunError,
+    task::{Task, TaskHandle, TaskWorktable},
+};
 use std::{cell::RefCell, sync::Arc};
 use tokio::{sync::oneshot, task::JoinHandle};
-use super::{error::RunError, task::{Task, TaskHandle, TaskWorktable}};
 
 #[derive(Debug)]
-pub struct Worker {
-}
+pub struct Worker {}
 
 impl Worker {
     pub async fn add_task<E: RunError>(&self, new_task: Box<dyn Task<E>>) -> TaskHandle<E> {

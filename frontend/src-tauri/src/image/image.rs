@@ -1,12 +1,16 @@
-use image::{ImageBuffer, Luma};
+use std::path::PathBuf;
+
+use image::{ImageBuffer, ImageFormat, Luma};
 use serde::Serialize;
 use specta::Type;
 use uuid::Uuid;
 
+use super::manager::ImageId;
+
 // Typescript representation of an image
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct TsImage {
-    pub id: Uuid,
+    pub id: ImageId,
     pub width: u32,
     pub height: u32,
 }
@@ -24,7 +28,7 @@ pub struct ImageU32 {
 }
 
 pub struct ImageHandler {
-    id: Uuid,
+    id: ImageId,
     image: ImageVariant,
 }
 
@@ -32,7 +36,13 @@ impl ImageHandler {
     pub fn new(image: ImageVariant) -> Self {
         Self {
             id: Uuid::new_v4(),
-            image
+            image,
+        }
+    }
+
+    pub fn save_image(&self, path: PathBuf, format: ImageFormat) {
+        match &self.image {
+            ImageVariant::ImageU16(img) => img.buffer.save_with_format(path, format).unwrap(),
         }
     }
 
@@ -61,10 +71,18 @@ impl ImageHandler {
             //ImageVariant::ImageU32(img) => img.buffer.height(),
         }
     }
+
+    pub fn get_ts_image(&self) -> TsImage {
+        TsImage {
+            id: self.id,
+            width: self.get_width(),
+            height: self.get_height(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct ImageDetails {
     width: u32,
-    height: u32
+    height: u32,
 }

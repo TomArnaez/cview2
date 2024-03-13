@@ -30,6 +30,7 @@ SLDeviceInfo convertDeviceInfoToCxx(const SLDeviceInfoRS& deviceInfo) {
     };
 }
 
+
 namespace SLBindings {
     template<typename T, typename... Args>
     std::unique_ptr<T>
@@ -55,7 +56,11 @@ namespace SLBindings {
         return devicesRs;
     }
 
-    SLError kernel_defect_correction(SLImage& image, const SLImage& defect_map) {
-        return SLImage::KernelDefectCorrection(image, image, const_cast<SLImage*>(&defect_map));
+    bool kernelDefectCorrection(SLImage& inImg, SLImage& defectMap) {
+        return SLImage::KernelDefectCorrection(inImg, inImg, &defectMap) == SLError::SL_ERROR_SUCCESS;
+    }
+
+    bool offsetCorrection(SLImage& inImg, SLImage& gainMap, int darkOffset) {
+        return SLImage::OffsetCorrection(inImg, &gainMap, darkOffset) == SLError::SL_ERROR_SUCCESS;
     }
 }

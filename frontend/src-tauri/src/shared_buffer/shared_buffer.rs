@@ -3,12 +3,15 @@ use serde::{ser::SerializeStruct, Serialize};
 use specta::Type;
 use std::ops::{Deref, DerefMut};
 use tauri::{AppHandle, Manager, Runtime};
-use windows_core::{ComInterface, HSTRING, PCWSTR};
-use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_19, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE};
 use tokio::sync::oneshot;
 use uuid::Uuid;
+use webview2_com::Microsoft::Web::WebView2::Win32::{
+    ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_19,
+    COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE,
+};
+use windows_core::{ComInterface, HSTRING, PCWSTR};
 
-#[derive(Clone, Serialize, Debug, Type)] 
+#[derive(Clone, Serialize, Debug, Type)]
 pub enum TypeTag {
     U8,
     U16,
@@ -48,14 +51,14 @@ pub struct SharedBuffer<T: HasTypeTag> {
 
 impl<T: HasTypeTag> Serialize for SharedBuffer<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer {
-                let mut state = serializer.serialize_struct("SharedBuffer", 3)?;
-                state.serialize_field("uuid", &self.uuid)?;
-                state.serialize_field("len", &self.len)?;
-                state.serialize_field("type", &T::type_tag())?;
-                state.end()
-
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("SharedBuffer", 3)?;
+        state.serialize_field("uuid", &self.uuid)?;
+        state.serialize_field("len", &self.len)?;
+        state.serialize_field("type", &T::type_tag())?;
+        state.end()
     }
 }
 
@@ -63,7 +66,9 @@ unsafe impl<T: HasTypeTag> Send for SharedBuffer<T> {}
 
 impl<T: HasTypeTag> Drop for SharedBuffer<T> {
     fn drop(&mut self) {
-        unsafe { self.shared_buffer.Close().unwrap(); }
+        unsafe {
+            self.shared_buffer.Close().unwrap();
+        }
     }
 }
 
@@ -77,7 +82,7 @@ impl<T: HasTypeTag> Deref for SharedBuffer<T> {
 
 impl<T: HasTypeTag> DerefMut for SharedBuffer<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { std::slice::from_raw_parts_mut(self.buffer, self.len)}
+        unsafe { std::slice::from_raw_parts_mut(self.buffer, self.len) }
     }
 }
 
@@ -109,7 +114,10 @@ impl<T: HasTypeTag + 'static> SharedBuffer<T> {
     }
 }
 
-impl<T: HasTypeTag + Clone + 'static> From<(&[T], AppHandle)> for SharedBuffer<T> where T: HasTypeTag {
+impl<T: HasTypeTag + Clone + 'static> From<(&[T], AppHandle)> for SharedBuffer<T>
+where
+    T: HasTypeTag,
+{
     fn from(item: (&[T], AppHandle)) -> Self {
         let mut buffer = SharedBuffer::<T>::new(item.0.len(), item.1);
         buffer.clone_from_slice(&item.0);

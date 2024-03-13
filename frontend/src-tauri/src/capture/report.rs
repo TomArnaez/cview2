@@ -15,7 +15,7 @@ pub struct CaptureReport {
 
     pub status: CaptureStatus,
     pub task_count: usize,
-    pub completed_task_count: usize
+    pub completed_task_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -25,7 +25,7 @@ pub enum CaptureStatus {
     Completed,
     Canceled,
     Failed,
-    CompletedWithErrors
+    CompletedWithErrors,
 }
 
 pub struct CaptureReportBuilder {
@@ -40,14 +40,11 @@ impl CaptureReportBuilder {
             name: self.name.clone(),
             task_count: 0,
             completed_task_count: 0,
-            status: CaptureStatus::Initialised
+            status: CaptureStatus::Initialised,
         }
     }
 
     pub fn new(id: Uuid, name: String) -> Self {
-        Self {
-            id,
-            name
-        }
+        Self { id, name }
     }
 }

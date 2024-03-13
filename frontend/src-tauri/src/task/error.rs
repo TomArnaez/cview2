@@ -5,14 +5,14 @@ use super::task::TaskId;
 /// Task system's error type definition, representing when internal errors occurs.
 #[derive(Debug, thiserror::Error)]
 pub enum SystemError {
-	#[error("task not found <task_id='{0}'>")]
-	TaskNotFound(TaskId),
-	#[error("task aborted <task_id='{0}'>")]
-	TaskAborted(TaskId),
-	#[error("task join error <task_id='{0}'>")]
-	TaskJoin(TaskId),
-	#[error("forced abortion for task <task_id='{0}'> timed out")]
-	TaskForcedAbortTimeout(TaskId),
+    #[error("task not found <task_id='{0}'>")]
+    TaskNotFound(TaskId),
+    #[error("task aborted <task_id='{0}'>")]
+    TaskAborted(TaskId),
+    #[error("task join error <task_id='{0}'>")]
+    TaskJoin(TaskId),
+    #[error("forced abortion for task <task_id='{0}'> timed out")]
+    TaskForcedAbortTimeout(TaskId),
 }
 
 /// Trait for errors that can be returned by tasks, we use this trait as a bound for the task system generic

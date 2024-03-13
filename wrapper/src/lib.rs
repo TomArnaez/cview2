@@ -1,3 +1,4 @@
+use core::fmt;
 use std::time::Duration;
 use cxx::{type_id, Exception, ExternType, UniquePtr};
 use serde::{Deserialize, Serialize};
@@ -103,7 +104,6 @@ pub enum SLError {
     #[error("Failed to write")]
     SL_ERROR_WRITE_FAILED,
 }
-
 
 unsafe impl ExternType for SLError {
     type Id = type_id!("SpectrumLogic::SLError");
@@ -228,11 +228,20 @@ pub mod slimage_ffi {
         #[rust_name="constuct_slimage_width_height_depth"]
         #[namespace="SLBindings"]
         fn construct(width: i32, height: i32, depth: i32) -> Result<UniquePtr<SLImage>>;
+        #[namespace="SLBindings"]
+        #[rust_name="kernel_defect_correction"]
+        fn kernelDefectCorrection(in_img: Pin<&mut SLImage>, defect_map: Pin<&mut SLImage>) -> bool;
+        #[namespace="SLBindings"]
+        #[rust_name="offset_correction"]
+        fn offsetCorrection(in_img: Pin<&mut SLImage>, defect_map: Pin<&mut SLImage>, dark_offset: i32) -> bool;
+
         fn GetHeight(self: &SLImage) -> i32;
         fn GetWidth(self: &SLImage) -> i32;
         fn GetDepth(self: &SLImage) -> i32;
+        fn IsDarkCorrected(self: Pin<&mut SLImage>) -> bool;
+        fn IsGainCorrected(self: Pin<&mut SLImage>) -> bool;
+        fn IsDefectCorrected(self: Pin<&mut SLImage>) -> bool;
         unsafe fn GetDataPointer(self: Pin<&mut SLImage>, frame: i32) -> *mut u16;
-       // unsafe fn KernelDefectCorrection(self, in_img: Pin<&mut SLImage>, out_img: Pin<&mut SLImage>, defect_map: *mut SLImage) -> SLError;
     }
 }
 
@@ -404,16 +413,46 @@ impl SLImage {
         self.image.GetDepth() as u32
     }
 
-    pub fn get_frame_data(&mut self, frame: u32) -> &[u16] {
+    pub fn is_dark_corrected(&mut self) -> bool {
+        self.image.pin_mut().IsDarkCorrected()
+    }
+
+    pub fn is_gain_corrected(&mut self) -> bool {
+        self.image.pin_mut().IsGainCorrected()
+    }
+
+    pub fn is_defect_corrected(&mut self) -> bool {
+        self.image.pin_mut().IsDefectCorrected()
+    }
+
+    pub fn kernel_defect_correction(&mut self, defect_map: &mut SLImage) -> bool {
+        slimage_ffi::kernel_defect_correction(self.image.pin_mut(), defect_map.image.pin_mut())
+    }
+
+    pub fn offset_correction(&mut self, gain_map: &mut SLImage, dark_offset: u32) -> bool {
+        slimage_ffi::offset_correction(self.image.pin_mut(), gain_map.image.pin_mut(), dark_offset as i32)
+    }
+
+    pub fn get_data(&mut self, frame: u32) -> &[u16] {
         unsafe {
             std::slice::from_raw_parts(self.image.pin_mut().GetDataPointer(frame as i32), (self.height() * self.width()) as usize)
         }
     }
 
-    pub fn get_frame_data_mut(&mut self, frame: u32) -> &mut [u16] {
+    pub fn get_data_mut(&mut self, frame: u32) -> &mut [u16] {
         unsafe {
             std::slice::from_raw_parts_mut(self.image.pin_mut().GetDataPointer(frame as i32), (self.height() * self.width()) as usize)
         }
+    }
+}
+
+impl fmt::Debug for SLImage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SLImage")
+            .field("width", &self.width())
+            .field("height", &self.height())
+            .field("depth", &self.depth())
+            .finish()
     }
 }
 

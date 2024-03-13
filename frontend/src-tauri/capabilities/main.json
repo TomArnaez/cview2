@@ -16,6 +16,7 @@
         "window:allow-start-dragging",
         "window:allow-toggle-maximize",
         "window:allow-close",
-        "window:allow-set-resizable"
+        "window:allow-set-resizable",
+        "dialog:allow-open"
       ]
 }

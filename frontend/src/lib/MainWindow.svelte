@@ -3,15 +3,15 @@
     import Histogram from "./components/charts/Histogram.svelte";
     import Devices from "./components/panels/Devices.svelte";
     import ImageList from "./components/ImageList.svelte";
-    import ViewComponent from "./components/ViewComponent.svelte";
-    import { createImageController } from "./images/imageController";
+    import { createImageController, type ImageController } from "./images/imageController";
 
-    const imageController = createImageController();
+    let imageController: ImageController = createImageController();
+    imageController.openImage();
 </script> 
 
 <div class="flex h-full bg-gray-800">
     <div class="w-32">
-      <ImageList {imageController}/>
+      <ImageList {imageController} />
     </div>
   
     <div class="flex-grow">

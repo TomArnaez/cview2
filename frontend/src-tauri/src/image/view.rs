@@ -1,31 +1,33 @@
+use super::image::ImageHandler;
+use crate::shared_buffer::SharedBuffer;
 use image::{Luma, Rgba};
 use tauri::AppHandle;
-use crate::shared_buffer::SharedBuffer;
-use super::image::ImageHandler;
 
 pub struct ImageView<'a> {
     handler: &'a ImageHandler,
     brightness: Brightness,
     saturated_colour: Option<Rgba<u8>>,
-    buffer: SharedBuffer<u8>
+    buffer: SharedBuffer<u8>,
 }
 
 impl<'a> ImageView<'a> {
     fn new(handler: &'a ImageHandler, app: AppHandle) -> Self {
         let data: Vec<u8> = match handler.get_image() {
-            super::image::ImageVariant::ImageU16(img) => {
-                img.buffer.pixels().flat_map(|pixel| {
+            super::image::ImageVariant::ImageU16(img) => img
+                .buffer
+                .pixels()
+                .flat_map(|pixel| {
                     let Luma([luma]) = *pixel;
                     let value = (luma >> 8) as u8;
                     vec![value, value, value, 255]
-                }).collect()
-            },
+                })
+                .collect(),
         };
         Self {
             handler,
             brightness: Brightness::new(50),
             saturated_colour: None,
-            buffer: SharedBuffer::from((data.as_slice(), app))
+            buffer: SharedBuffer::from((data.as_slice(), app)),
         }
     }
 }

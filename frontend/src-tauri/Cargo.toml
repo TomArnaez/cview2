@@ -17,6 +17,7 @@ tauri-build = { version = "2.0.0-beta", features = [] }
 [dependencies]
 tauri = { version = "2.0.0-beta", features = ["test"] }
 tauri-plugin-log = "2.0.0-beta"
+tauri-plugin-dialog = "2.0.0-beta"
 specta = { workspace = true, features = ["time"] }
 tauri-specta = { workspace = true }
 serde = { version = "1.0.194", features = ["derive"] }
