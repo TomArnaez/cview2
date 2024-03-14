@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
 
-use super::{capture::DynCapture, error::DetectorControllerError, DetectorId, DetectorManager, TsDetector};
+use super::{error::DetectorControllerError, DetectorId, DetectorManager, TsDetector};
 
 #[tauri::command]
 pub async fn list_all_detectors(

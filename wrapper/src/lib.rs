@@ -429,8 +429,8 @@ impl SLImage {
         slimage_ffi::kernel_defect_correction(self.image.pin_mut(), defect_map.image.pin_mut())
     }
 
-    pub fn offset_correction(&mut self, gain_map: &mut SLImage, dark_offset: u32) -> bool {
-        slimage_ffi::offset_correction(self.image.pin_mut(), gain_map.image.pin_mut(), dark_offset as i32)
+    pub fn offset_correction(&mut self, dark_map: &mut SLImage, dark_offset: u32) -> bool {
+        slimage_ffi::offset_correction(self.image.pin_mut(), dark_map.image.pin_mut(), dark_offset as i32)
     }
 
     pub fn get_data(&mut self, frame: u32) -> &[u16] {

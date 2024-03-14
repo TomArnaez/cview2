@@ -6,7 +6,7 @@ use tauri::{async_runtime::block_on, AppHandle};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use uuid::Uuid;
 use wrapper::{
-    scan_cameras, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice,
+    DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice,
     SLDeviceInfo, SLError, SLImage, ROI,
 };
 
@@ -15,8 +15,10 @@ use crate::{
     event::{self, Event},
 };
 
+use super::capture::StatefulCapture;
+use super::capture_modes::CaptureContext;
 use super::{
-    capture::{Capture, CaptureCommand, DynCapture},
+    capture::{Capture, CaptureCommand},
     error::DetectorControllerError,
     report::{CaptureReport, CaptureReportUpdate},
 };
@@ -296,8 +298,8 @@ pub enum DetectorStatus {
 
 #[derive(Debug)]
 pub struct CorrectionImages {
-    defect_map: Option<SLImage>,
-    dark_maps: HashMap<Duration, SLImage>
+    pub defect_map: Option<SLImage>,
+    pub dark_maps: HashMap<Duration, SLImage>
 }
 
 impl Default for CorrectionImages {
@@ -313,7 +315,6 @@ impl Default for CorrectionImages {
 pub struct DetectorControllerInner {
     detector_status: DetectorStatus,
     capture_report: Option<CaptureReport>,
-    correction_images: CorrectionImages
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -323,12 +324,15 @@ pub struct DetectorSpecification {
     pub height: u32,
 }
 
-// Typescript representation of a detector
+// Typescript representation of detector state
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TsDetector {
+    id: DetectorId,
     specification: DetectorSpecification,
     status: DetectorStatus,
+    defect_map_available: bool,
+    dark_map_exposures: Vec<Duration>
 }
 
 pub type DetectorId = Uuid;
@@ -342,6 +346,7 @@ pub struct DetectorService {
     inner: Arc<Mutex<DetectorControllerInner>>,
     status_tx: mpsc::Sender<DetectorStatus>,
     capture_cmd_tx: Option<watch::Sender<CaptureCommand>>,
+    correction_images: Arc<Mutex<CorrectionImages>>
 }
 
 #[derive(Debug, Serialize)]
@@ -407,7 +412,6 @@ impl DetectorService {
         let inner = Arc::new(Mutex::new(DetectorControllerInner {
             detector_status,
             capture_report: None,
-            correction_images: CorrectionImages::default()
         }));
 
         let heartbeat_handle = {
@@ -446,44 +450,52 @@ impl DetectorService {
             inner,
             status_tx,
             capture_cmd_tx: None,
+            correction_images: Arc::new(Mutex::new(CorrectionImages::default()))
         })
     }
 
     pub async fn get_ts_detector(&self) -> TsDetector {
+        let correction_images = self.correction_images.lock().await;
+
         TsDetector {
+            id: self.id,
             specification: self.specification,
             status: self.inner.lock().await.detector_status,
+            defect_map_available: correction_images.defect_map.is_some(),
+            dark_map_exposures: correction_images.dark_maps.keys().cloned().collect()
         }
     }
 
-    pub async fn run_capture<T: DynCapture + 'static>(
+    pub async fn run_capture<T: StatefulCapture>(
         &mut self,
         app: AppHandle,
-        mut capture: T,
+        mut capture: Capture<T>,
     ) -> Result<(), DetectorControllerError> {
         let mut inner_lock = self.inner.lock().await;
         match inner_lock.detector_status {
-            DetectorStatus::Disconnected => {
-                return Err(DetectorControllerError::DetectorDisconnected)
-            }
+            DetectorStatus::Disconnected => return Err(DetectorControllerError::DetectorDisconnected),
             DetectorStatus::Capturing => return Err(DetectorControllerError::CaptureInProgress),
             DetectorStatus::Idle => {
                 inner_lock.detector_status = DetectorStatus::Capturing;
                 let id = self.id;
-                let detector_capture_handle =
-                    DetectorCaptureHandle::new(self.detector_handle.clone());
 
                 let (command_tx, command_rx) =
                     watch::channel::<CaptureCommand>(CaptureCommand::Cancel);
-                let (report_tx, mut report_rx) = mpsc::channel(10);
+                let (events_tx, events_rx) = async_channel::unbounded();
+
+                let ctx = CaptureContext {
+                    app: app.clone(),
+                    events_tx,
+                    correction_images: self.correction_images.clone(),
+                    detector_handle: DetectorCaptureHandle::new(self.detector_handle.clone())
+                };
+
                 tauri::async_runtime::spawn(async move {
                     let mut report = capture.report_mut().clone();
 
                     tokio::select! {
-                        Some(report_update) = report_rx.recv() => {
-                            Self::handle_capture_progresss(app.clone(), id, &mut report, report_update);
-                        },
-                        capture_output = capture.run(detector_capture_handle, command_rx, report_tx) => {
+                        Ok(report_update) = events_rx.recv() => Self::handle_capture_progresss(app.clone(), id, &mut report, report_update),
+                        capture_output = capture.run(ctx, command_rx) => {
                             match capture_output {
                                 Ok(_) => report.status = CaptureStatus::Completed,
                                 Err(JobError::Canceled) => report.status = CaptureStatus::Canceled,
@@ -528,12 +540,9 @@ impl DetectorService {
         update: CaptureReportUpdate,
     ) {
         match update {
-            CaptureReportUpdate::TaskCount(task_count) => {
-                report.task_count = task_count;
-            }
-            CaptureReportUpdate::CompletedTaskCount(completed_task_count) => {
-                report.completed_task_count = completed_task_count;
-            }
+            CaptureReportUpdate::TaskCount(task_count) => report.task_count = task_count,
+            CaptureReportUpdate::CompletedTaskCount(completed_task_count) => report.completed_task_count = completed_task_count,
+            CaptureReportUpdate::Message(message) => report.message = message
         }
 
         event::send(
@@ -573,7 +582,7 @@ impl DetectorManager {
         DetectorManager { detectors }
     }
 
-    pub async fn run_capture<T: DynCapture + 'static>(&mut self, app: AppHandle, id: DetectorId, capture: T) -> Result<(), DetectorControllerError> {
+    pub async fn run_capture<T: StatefulCapture>(&mut self, app: AppHandle, id: DetectorId, capture: Capture<T>) -> Result<(), DetectorControllerError> {
         let detector = self.get_detector_mut(id)?;
         detector.run_capture(app, capture).await?;
         Ok(())
@@ -602,7 +611,6 @@ mod tests {
     use super::DetectorService;
     use crate::capture::{
         capture::{Capture, CaptureSettings},
-        capture_modes::SequenceCapture,
     };
     use tokio::sync::mpsc::channel;
     use wrapper::{DeviceInterface, ROI};

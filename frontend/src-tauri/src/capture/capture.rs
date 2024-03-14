@@ -1,14 +1,12 @@
 use super::{
-    detector::DetectorCaptureHandle,
-    error::JobError,
-    report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate},
+    capture_modes::CaptureContext, error::JobError, report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate}
 };
 use log::info;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 use tauri::async_runtime::JoinHandle;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
 use wrapper::{FullWellModes, ROI};
 
@@ -71,50 +69,35 @@ pub trait StatefulCapture: Send + Sync + 'static {
 
     async fn init(
         &self,
-        detector_handle: DetectorCaptureHandle,
+        ctx: &CaptureContext
     ) -> Result<JobInitOutput<Self::Step, Self::Data>, JobError>;
     async fn execute_step(
         &self,
         step: &Self::Step,
         data: &mut Self::Data,
-        events_tx: mpsc::Sender<CaptureReportUpdate>,
+        ctx: &CaptureContext,
     );
-    async fn finalise(&self, data: Self::Data) -> Self::Result;
+    async fn finalise(&self, data: Self::Data, capture_ctx: &CaptureContext) -> Self::Result;
 }
 
-#[async_trait::async_trait]
-pub trait DynCapture: Send + Sync {
-    fn id(&self) -> Uuid;
-    fn report(&self) -> &CaptureReport;
-    fn report_mut(&mut self) -> &mut CaptureReport;
-    async fn run(
-        &mut self,
-        detector_handle: DetectorCaptureHandle,
-        rx: watch::Receiver<CaptureCommand>,
-        events_tx: mpsc::Sender<CaptureReportUpdate>,
-    ) -> Result<(), JobError>;
-}
-
-#[async_trait::async_trait]
-impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
-    fn id(&self) -> Uuid {
+impl<SJob: StatefulCapture> Capture<SJob> {
+    pub fn id(&self) -> Uuid {
         self.id
     }
 
-    fn report(&self) -> &CaptureReport {
+    pub fn report(&self) -> &CaptureReport {
         &self.report
     }
 
-    fn report_mut(&mut self) -> &mut CaptureReport {
+    pub fn report_mut(&mut self) -> &mut CaptureReport {
         &mut self.report
     }
 
-    async fn run(
+    pub async fn run(
         &mut self,
-        detector_handle: DetectorCaptureHandle,
+        ctx: CaptureContext,
         rx: watch::Receiver<CaptureCommand>,
-        events_tx: mpsc::Sender<CaptureReportUpdate>,
-    ) -> Result<(), JobError> {
+    ) -> Result<SJob::Result, JobError> {
         let id = self.id();
         info!("Starting capture <id={id}>");
 
@@ -131,14 +114,16 @@ impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
         let stateful_job = Arc::new(init);
         let working_data = Arc::new(Mutex::new(data));
 
+        let ctx = Arc::new(ctx);
+
         let init_task = {
-            let events_tx = events_tx.clone();
+            let ctx = Arc::clone(&ctx);
             let stateful_job = Arc::clone(&stateful_job);
             tauri::async_runtime::spawn(async move {
-                let res = stateful_job.init(detector_handle).await;
+                let res = stateful_job.init(&ctx).await;
 
                 if let Ok(res) = res.as_ref() {
-                    events_tx
+                    ctx.events_tx
                         .send(CaptureReportUpdate::TaskCount(res.steps.len()))
                         .await
                         .unwrap();
@@ -156,11 +141,11 @@ impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
             let working_data = Arc::clone(&working_data);
 
             let step = Arc::new(steps.pop_front().unwrap());
-            let events_tx = events_tx.clone();
+            let ctx = Arc::clone(&ctx);
             let step_task = tauri::async_runtime::spawn(async move {
                 let mut lock = working_data.lock().await;
                 let data = lock.as_mut().unwrap();
-                stateful_job.execute_step(&step, data, events_tx).await;
+                stateful_job.execute_step(&step, data, &ctx).await;
             });
 
             handle_single_step(step_task, rx.clone()).await?;
@@ -168,7 +153,10 @@ impl<SJob: StatefulCapture> DynCapture for Capture<SJob> {
             step_number += 1;
         }
 
-        Ok(())
+        // Allow finalise to own the data to do whatever with it
+        let data = working_data.lock().await.take().unwrap();
+        let res = stateful_job.finalise(data, &ctx).await;
+        Ok(res)
     }
 }
 
@@ -219,11 +207,6 @@ async fn handle_single_step(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub enum CaptureType {
-    Stream(StreamCapture),
-}
-
 #[derive(Debug)]
 pub enum CaptureCommand {
     Cancel,
@@ -236,10 +219,4 @@ pub struct CaptureSettings {
     pub roi: ROI,
     pub test_mode: bool,
     pub timeout: Duration,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Type)]
-pub struct StreamCapture {
-    capture_settings: CaptureSettings,
-    stream_time: Option<Duration>,
 }

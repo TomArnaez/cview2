@@ -1,17 +1,19 @@
+use std::rc::{Rc, Weak};
+
 use super::image::ImageHandler;
 use crate::shared_buffer::SharedBuffer;
 use image::{Luma, Rgba};
 use tauri::AppHandle;
 
-pub struct ImageView<'a> {
-    handler: &'a ImageHandler,
+pub struct ImageView {
+    handler: Weak<ImageHandler>,
     brightness: Brightness,
     saturated_colour: Option<Rgba<u8>>,
     buffer: SharedBuffer<u8>,
 }
 
-impl<'a> ImageView<'a> {
-    fn new(handler: &'a ImageHandler, app: AppHandle) -> Self {
+impl ImageView {
+    fn new(handler: &ImageHandler, app: AppHandle) -> Self {
         let data: Vec<u8> = match handler.get_image() {
             super::image::ImageVariant::ImageU16(img) => img
                 .buffer
@@ -23,8 +25,9 @@ impl<'a> ImageView<'a> {
                 })
                 .collect(),
         };
+        let ptr = Rc::new(handler);
         Self {
-            handler,
+            handler: Rc::downgrade(&ptr),
             brightness: Brightness::new(50),
             saturated_colour: None,
             buffer: SharedBuffer::from((data.as_slice(), app)),

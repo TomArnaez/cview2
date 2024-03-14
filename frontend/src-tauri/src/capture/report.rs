@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub enum CaptureReportUpdate {
     TaskCount(usize),
     CompletedTaskCount(usize),
+    Message(String)
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -16,6 +17,8 @@ pub struct CaptureReport {
     pub status: CaptureStatus,
     pub task_count: usize,
     pub completed_task_count: usize,
+
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -41,6 +44,7 @@ impl CaptureReportBuilder {
             task_count: 0,
             completed_task_count: 0,
             status: CaptureStatus::Initialised,
+            message: String::new()
         }
     }
 
