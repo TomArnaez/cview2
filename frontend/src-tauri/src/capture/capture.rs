@@ -1,5 +1,5 @@
 use super::{
-    capture_modes::CaptureContext, error::JobError, report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate}
+    capture_modes::CaptureContext, error::CaptureError, report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate}
 };
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -70,14 +70,18 @@ pub trait StatefulCapture: Send + Sync + 'static {
     async fn init(
         &self,
         ctx: &CaptureContext
-    ) -> Result<JobInitOutput<Self::Step, Self::Data>, JobError>;
+    ) -> Result<JobInitOutput<Self::Step, Self::Data>, CaptureError>;
     async fn execute_step(
         &self,
         step: &Self::Step,
         data: &mut Self::Data,
         ctx: &CaptureContext,
-    );
-    async fn finalise(&self, data: Self::Data, capture_ctx: &CaptureContext) -> Self::Result;
+    ) -> Result<CaptureStepOutput, CaptureError>;
+    async fn finalise(
+        &self,
+        data: Self::Data,
+        capture_ctx: &CaptureContext
+    ) -> Self::Result;
 }
 
 impl<SJob: StatefulCapture> Capture<SJob> {
@@ -97,7 +101,7 @@ impl<SJob: StatefulCapture> Capture<SJob> {
         &mut self,
         ctx: CaptureContext,
         rx: watch::Receiver<CaptureCommand>,
-    ) -> Result<SJob::Result, JobError> {
+    ) -> Result<SJob::Result, CaptureError> {
         let id = self.id();
         info!("Starting capture <id={id}>");
 
@@ -165,10 +169,14 @@ pub struct JobInitOutput<Step, Data> {
     pub steps: VecDeque<Step>,
 }
 
+pub struct CaptureStepOutput {
+    pub request_input: Option<String>
+}
+
 async fn handle_init_phase<SJob: StatefulCapture>(
-    mut init_task: JoinHandle<Result<JobInitOutput<SJob::Step, SJob::Data>, JobError>>,
+    mut init_task: JoinHandle<Result<JobInitOutput<SJob::Step, SJob::Data>, CaptureError>>,
     mut commands_rx: watch::Receiver<CaptureCommand>,
-) -> Result<JobInitOutput<SJob::Step, SJob::Data>, JobError> {
+) -> Result<JobInitOutput<SJob::Step, SJob::Data>, CaptureError> {
     tokio::select! {
         result = &mut init_task => {
             return result.unwrap();
@@ -179,7 +187,7 @@ async fn handle_init_phase<SJob: StatefulCapture>(
                 CaptureCommand::Cancel => {
                     init_task.abort();
                     info!("Cancelling Job");
-                    return Err(JobError::Canceled);
+                    return Err(CaptureError::Canceled);
                 },
             }
         }
@@ -189,7 +197,7 @@ async fn handle_init_phase<SJob: StatefulCapture>(
 async fn handle_single_step(
     mut step_task: JoinHandle<()>,
     mut commands_rx: watch::Receiver<CaptureCommand>,
-) -> Result<(), JobError> {
+) -> Result<(), CaptureError> {
     tokio::select! {
         result = &mut step_task => {
             return Ok(());
@@ -200,7 +208,7 @@ async fn handle_single_step(
                 CaptureCommand::Cancel => {
                     step_task.abort();
                     info!("Cancelling Job");
-                    return Err(JobError::Canceled);
+                    return Err(CaptureError::Canceled);
                 },
             }
         }

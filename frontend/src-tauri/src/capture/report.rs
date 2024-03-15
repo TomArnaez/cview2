@@ -6,7 +6,8 @@ use uuid::Uuid;
 pub enum CaptureReportUpdate {
     TaskCount(usize),
     CompletedTaskCount(usize),
-    Message(String)
+    Message(String),
+    RequestingInput(String)
 }
 
 #[derive(Debug, Serialize, Clone)]

@@ -1,13 +1,9 @@
-use crate::{capture::{
-    capture::{CaptureSettings, JobInitOutput, StatefulCapture},
-    detector::DetectorCaptureHandle,
-    error::JobError,
-    report::CaptureReportUpdate,
-}, image::ImageManager};
 use std::{sync::Mutex, time::Duration};
 use tauri::Manager;
 use wrapper::{ExposureModes, SLImage};
 use async_trait::async_trait;
+use crate::capture::{capture::{CaptureSettings, CaptureStepOutput, JobInitOutput, StatefulCapture}, error::CaptureError, report::CaptureReportUpdate};
+
 use super::{helpers::configure_device_for_capture, CaptureContext};
 
 pub struct SequenceCapture {
@@ -36,7 +32,7 @@ impl StatefulCapture for SequenceCapture {
     async fn init(
         &self,
         ctx: &CaptureContext
-    ) -> Result<JobInitOutput<Self::Step, Self::Data>, JobError> {
+    ) -> Result<JobInitOutput<Self::Step, Self::Data>, CaptureError> {
         configure_device_for_capture(ctx.detector_handle.clone(), self.capture_settings).await?;
 
         let dims = ctx.detector_handle.get_image_dims().await?;
@@ -71,7 +67,7 @@ impl StatefulCapture for SequenceCapture {
         step: &Self::Step,
         data: &mut Self::Data,
         ctx: &CaptureContext
-    ) {
+    ) -> Result<CaptureStepOutput, CaptureError> {
         let dims = ctx.detector_handle.get_image_dims().await.unwrap();
         let vec = vec![0u16; (dims.0 * dims.1) as usize];
         ctx.detector_handle.acquire_image(vec, None).await.unwrap();

@@ -3,24 +3,19 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
+mod image;
 mod capture;
 mod event;
-mod image;
 mod shared_buffer;
 mod task;
-
-use crate::{
-    capture::{list_all_detectors, run_capture, DetectorManager},
-    image::{list_all_images, open_image, save_image_as_bitmap, save_image_as_tiff, ImageManager},
-};
 
 #[tauri::command]
 #[specta::specta]
 async fn init(app: AppHandle) {
     info!("Running init");
 
-    app.manage(Mutex::new(DetectorManager::new(app.clone()).await));
-    app.manage(Mutex::new(ImageManager::new()));
+    app.manage(Mutex::new(capture::DetectorManager::new(app.clone()).await));
+    app.manage(Mutex::new(image::ImageManager::new()));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,12 +33,12 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             init,
-            list_all_detectors,
-            open_image,
-            run_capture,
-            list_all_images,
-            save_image_as_bitmap,
-            save_image_as_tiff
+            capture::commands::list_all_detectors,
+            capture::commands::run_capture,
+            image::commands::open_image,
+            image::commands::list_all_images,
+            image::commands::save_image_as_bitmap,
+            image::commands::save_image_as_tiff
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

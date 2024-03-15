@@ -9,7 +9,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_19,
     COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE,
 };
-use windows_core::{ComInterface, HSTRING, PCWSTR};
+use windows_core::{HSTRING, PCWSTR, ComInterface};
 
 #[derive(Clone, Serialize, Debug, Type)]
 pub enum TypeTag {

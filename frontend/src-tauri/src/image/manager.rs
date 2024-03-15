@@ -1,7 +1,6 @@
 use super::{
     error::{ImageFileError, ImageManagerError},
     image::{ImageHandler, ImageU16, ImageVariant, TsImage},
-    view::ImageView,
 };
 use image::{ImageBuffer, ImageFormat};
 use uuid::Uuid;
@@ -11,16 +10,14 @@ use tiff::decoder::{Decoder, DecodingResult};
 
 pub type ImageId = Uuid;
 
-pub struct ImageManager<'a> {
+pub struct ImageManager {
     images: Vec<ImageHandler>,
-    views: Vec<ImageView<'a>>,
 }
 
-impl<'a> ImageManager<'a> {
+impl ImageManager {
     pub fn new() -> Self {
         let manager = Self {
             images: Vec::new(),
-            views: Vec::new(),
         };
         manager.emit_state();
         manager
@@ -87,7 +84,7 @@ impl<'a> ImageManager<'a> {
     }
 }
 
-unsafe impl<'a> Send for ImageManager<'a> {}
+unsafe impl Send for ImageManager {}
 
 #[cfg(test)]
 mod tests {

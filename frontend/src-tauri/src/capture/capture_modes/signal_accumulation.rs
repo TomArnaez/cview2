@@ -1,7 +1,7 @@
 use std::time::Duration;
 use async_trait::async_trait;
 use wrapper::SLImage;
-use crate::capture::{capture::{CaptureBuilder, CaptureSettings, JobInitOutput, StatefulCapture}, error::JobError};
+use crate::capture::{capture::{CaptureBuilder, CaptureSettings, CaptureStepOutput, JobInitOutput, StatefulCapture}, error::CaptureError};
 use super::{sequence::SequenceCapture, CaptureContext};
 
 pub struct SignalAccumulationCapture {
@@ -28,7 +28,7 @@ impl StatefulCapture for SignalAccumulationCapture {
     async fn init(
         &self,
         ctx: &CaptureContext
-    ) -> Result<JobInitOutput<Self::Step, Self::Data>, JobError> {
+    ) -> Result<JobInitOutput<Self::Step, Self::Data>, CaptureError> {
         let dims = ctx.detector_handle.get_image_dims().await?;
         let frames: Vec<SLImage> = (0..self.frame_count)
         .map(|_| SLImage::new(dims.0, dims.1))
@@ -49,7 +49,7 @@ impl StatefulCapture for SignalAccumulationCapture {
         step: &Self::Step,
         data: &mut Self::Data,
         ctx: &CaptureContext
-    ) {
+    ) -> Result<CaptureStepOutput, CaptureError> {
         let sequence_capture = CaptureBuilder::new(SequenceCapture {
             capture_settings: self.capture_settings,
             exposure_time: self.exp_times,

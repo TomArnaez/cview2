@@ -10,8 +10,9 @@ use wrapper::{
     SLDeviceInfo, SLError, SLImage, ROI,
 };
 
+use crate::capture::error::CaptureError;
+use crate::capture::report::CaptureStatus;
 use crate::{
-    capture::{error::JobError, report::CaptureStatus},
     event::{self, Event},
 };
 
@@ -498,7 +499,7 @@ impl DetectorService {
                         capture_output = capture.run(ctx, command_rx) => {
                             match capture_output {
                                 Ok(_) => report.status = CaptureStatus::Completed,
-                                Err(JobError::Canceled) => report.status = CaptureStatus::Canceled,
+                                Err(CaptureError::Canceled) => report.status = CaptureStatus::Canceled,
                                 Err(e) => {
                                     error!(
                                         "Job<id='{}', name='{}'> failed with error: {e:#?};",
@@ -606,46 +607,5 @@ impl DetectorManager {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
 
-    use super::DetectorService;
-    use crate::capture::{
-        capture::{Capture, CaptureSettings},
-    };
-    use tokio::sync::mpsc::channel;
-    use wrapper::{DeviceInterface, ROI};
-
-    #[tokio::test]
-    async fn test_controller() {
-        // let _ = env_logger::try_init();
-
-        // let (tx, rx) = channel(10);
-        // let mut detector_controller = DetectorService::new_from_interface(DeviceInterface::USB, tx).await.unwrap();
-        // let capture_settings = CaptureSettings {
-        //     dds: false,
-        //     test_mode: true,
-
-        //     full_well_mode: wrapper::FullWellModes::High,
-        //     roi: ROI::default(),
-        //     timeout: Duration::from_secs(1)
-        // };
-
-        // let sequence = SequenceCaptureInit {
-        //     capture_settings,
-        //     frame_count: 10,
-        //     exposure_time: Duration::from_millis(100)
-        // };
-
-        // let capture = Capture::new(sequence);
-        // let mut events_tx = detector_controller.run_capture(capture).await.unwrap();
-
-        // while let Some(msg) = events_tx.recv().await {
-        //     match msg {
-        //         crate::capture::report::CaptureReportUpdate::CompletedTaskCount(frame) => {
-        //             detector_controller.cancel_capture().await;
-        //         },
-        //         _ => {}
-        //     }
-        // }
-    }
 }

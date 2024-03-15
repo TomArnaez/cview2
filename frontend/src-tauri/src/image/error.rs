@@ -3,6 +3,8 @@ use specta::Type;
 use std::path::PathBuf;
 use thiserror::Error;
 
+use super::view::ImageViewId;
+
 #[derive(Error, Serialize, Debug, Type)]
 pub enum ImageManagerError {
     #[error("image not found error")]
@@ -20,4 +22,10 @@ pub enum ImageFileError {
     TIFFError,
     #[error("Unsupported format")]
     UnsupportedFormat,
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum ImageViewError {
+    #[error("couldn't open image view with id {0:?}")]
+    ImageViewNotFound(ImageViewId)
 }

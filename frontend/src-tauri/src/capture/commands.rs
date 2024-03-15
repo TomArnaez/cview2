@@ -1,5 +1,6 @@
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
+use tauri::ipc::Channel;
 
 use super::{error::DetectorControllerError, DetectorId, DetectorManager, TsDetector};
 
