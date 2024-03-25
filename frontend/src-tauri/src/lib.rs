@@ -1,6 +1,5 @@
-use log::info;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
 mod image;
@@ -9,13 +8,6 @@ mod event;
 mod shared_buffer;
 mod task;
 
-#[tauri::command]
-#[specta::specta]
-async fn init(app: AppHandle) {
-    info!("Running init");
-
-    app.manage(Mutex::new(capture::DetectorManager::new(app.clone()).await));
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,10 +24,11 @@ pub fn run() {
         )
         .setup(|app| {
             app.manage(Mutex::new(image::ImageViewController::new()));
+            app.manage(tokio::sync::Mutex::new(tauri::async_runtime::block_on(capture::DetectorManager::new(app.handle().clone()))));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            init,
+            capture::commands::cancel_capture,
             capture::commands::list_all_detectors,
             capture::commands::run_capture,
             image::commands::get_pixel_value,

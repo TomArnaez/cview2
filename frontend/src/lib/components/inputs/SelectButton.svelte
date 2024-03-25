@@ -6,7 +6,7 @@
   
     const {
       elements: { trigger, menu, option },
-      states: { selectedLabel, open, selected },
+      states: { selectedLabel, open },
     } = createSelect<string>({
       forceVisible: true,
       positioning: {
@@ -37,8 +37,7 @@
             {#each labels as item}
                 <div
                 class="relative cursor-pointer py-1 pl-8 pr-4 text-neutral-800
-                hover:bg-magnum-100 focus:z-10
-                focus:text-magnum-700
+                focus:z-10
                 data-[highlighted]:bg-magnum-200 data-[highlighted]:text-magnum-900
                 data-[disabled]:opacity-50"
                 use:melt={$option({ value: item, label: item })}

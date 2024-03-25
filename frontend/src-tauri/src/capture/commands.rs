@@ -1,7 +1,5 @@
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
-use tauri::ipc::Channel;
-
 use super::{error::DetectorControllerError, DetectorId, DetectorManager, TsDetector};
 
 #[tauri::command]
@@ -16,4 +14,12 @@ pub async fn run_capture(app: AppHandle, manager: State<'_, Mutex<DetectorManage
     //capture.id()?;
     //manager.lock().await.run_capture(app, id, capture).await?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_capture(
+    manager: State<'_, Mutex<DetectorManager>>,
+    id: DetectorId,
+) -> Result<(), DetectorControllerError> {
+    manager.lock().await.cancel_capture(id).await
 }

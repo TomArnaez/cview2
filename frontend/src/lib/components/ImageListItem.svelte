@@ -4,6 +4,6 @@
     export let view: View;
     export let isSelected: boolean;
 </script>
-<div class="{isSelected ? 'bg-blue-300' : 'bg-neutral-50'} border border-black">
+<div class="{isSelected ? 'bg-blue-300' : 'bg-neutral-50'} ">
     width: {view.height}, height: {view.width}
 </div>

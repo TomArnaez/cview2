@@ -2,6 +2,6 @@
     export let count: string | number;
 </script>
 
-<span class="bg-gray-500 text-white text-xs font-semibold mr-1 px-2.5 py-0.5 rounded-full">
+<span class="inline-flex items-center justify-center w-4 h-4 ms-2 text-xs font-semibold text-blue-800 bg-blue-200 rounded-full">
     {count}
 </span>

@@ -1,13 +1,11 @@
 <script lang="ts">
-  import type { CaptureMode } from "../../../bindings";
+  import type { Detector } from "../../detector/types";
   import Collapsible from "../Collapsible.svelte";
+  import DetectorSelector from "../DetectorSelector.svelte";
   import SelectButton from "../inputs/SelectButton.svelte";
 
-  const devices = [ "PLEORA", "USB", "S2I" ]
-
-  let captureMode: CaptureMode;
+  export let detectors: Detector[]
 </script>
 
 <Collapsible title="Devices">
-    <SelectButton name={"Detector"} labels={devices}/>
 </Collapsible>

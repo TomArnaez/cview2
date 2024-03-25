@@ -320,6 +320,7 @@ pub struct DetectorControllerInner {
 pub struct DetectorSpecification {
     pub width: u32,
     pub height: u32,
+    pub interface: DeviceInterface
 }
 
 // Typescript representation of detector state
@@ -329,7 +330,7 @@ pub struct TsDetector {
     id: DetectorId,
     specification: DetectorSpecification,
     status: DetectorStatus,
-    defect_map_available: bool,
+    defect_map: bool,
     dark_map_exposures: Vec<Duration>
 }
 
@@ -397,6 +398,7 @@ impl DetectorService {
         let specification = DetectorSpecification {
             height: dims.0,
             width: dims.1,
+            interface
         };
 
         let id = DetectorId::new_v4();
@@ -459,7 +461,7 @@ impl DetectorService {
             id: self.id,
             specification: self.specification,
             status: self.inner.lock().await.detector_status,
-            defect_map_available: correction_images.defect_map.is_some(),
+            defect_map: correction_images.defect_map.is_some(),
             dark_map_exposures: correction_images.dark_maps.keys().cloned().collect()
         }
     }
@@ -495,7 +497,9 @@ impl DetectorService {
                         Ok(report_update) = events_rx.recv() => Self::handle_capture_progresss(app.clone(), id, &mut report, report_update),
                         capture_output = capture.run(ctx, command_rx) => {
                             match capture_output {
-                                Ok(_) => report.status = CaptureStatus::Completed,
+                                Ok(result) => {
+                                    report.status = CaptureStatus::Completed
+                                },
                                 Err(CaptureError::Canceled) => report.status = CaptureStatus::Canceled,
                                 Err(e) => {
                                     error!(
@@ -510,7 +514,6 @@ impl DetectorService {
                 });
 
                 self.capture_cmd_tx = Some(command_tx);
-
                 Ok(())
             }
         }
@@ -543,15 +546,6 @@ impl DetectorService {
             CaptureReportUpdate::Message(message) => report.message = message
         }
 
-        event::send(
-            app,
-            &&Event::detector_capture_progress(id, CaptureProgressEvent {
-                completed_task_count: report.completed_task_count,
-                task_count: report.task_count,
-                message: "TBC".to_owned(),
-            }),
-        )
-        .unwrap();
     }
 }
 
@@ -569,7 +563,6 @@ impl DetectorManager {
             match DetectorService::new_from_device_info(app.clone(), device_info, tx).await {
                 Ok(detector) => {
                     detectors.push(detector);
-                    event::send(app.clone(), &Event::new_detector_connected()).unwrap();
                 }
                 Err(e) => {
                     error!("Failed to connect to detector with error {:?}", e);
@@ -584,6 +577,10 @@ impl DetectorManager {
         let detector = self.get_detector_mut(id)?;
         detector.run_capture(app, capture).await?;
         Ok(())
+    }
+
+    pub async fn cancel_capture(&mut self, id: DetectorId) -> Result<(), DetectorControllerError> {
+        self.get_detector_mut(id)?.cancel_capture().await
     }
 
     pub async fn list_all_detectors(&self) -> Vec<TsDetector> {
