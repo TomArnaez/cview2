@@ -7,7 +7,6 @@ pub enum CaptureReportUpdate {
     TaskCount(usize),
     CompletedTaskCount(usize),
     Message(String),
-    RequestingInput(String)
 }
 
 #[derive(Debug, Serialize, Clone)]

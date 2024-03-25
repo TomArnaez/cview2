@@ -10,3 +10,10 @@ export type Detector = {
     specification: DetectorSpecification,
     status: DetectorStatus
 };
+
+export type CaptureMode = ({type: "SignalAccumulationCapture"} & SignalAccumulationCapture)
+
+export type SignalAccumulationCapture = {
+    expTimes: number[],
+    frames: number,
+}

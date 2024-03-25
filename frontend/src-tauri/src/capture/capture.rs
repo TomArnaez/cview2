@@ -76,7 +76,7 @@ pub trait StatefulCapture: Send + Sync + 'static {
         step: &Self::Step,
         data: &mut Self::Data,
         ctx: &CaptureContext,
-    ) -> Result<CaptureStepOutput, CaptureError>;
+    );
     async fn finalise(
         &self,
         data: Self::Data,
@@ -171,6 +171,7 @@ pub struct JobInitOutput<Step, Data> {
 
 pub struct CaptureStepOutput {
     pub request_input: Option<String>
+
 }
 
 async fn handle_init_phase<SJob: StatefulCapture>(

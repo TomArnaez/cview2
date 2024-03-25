@@ -49,7 +49,7 @@ impl StatefulCapture for SignalAccumulationCapture {
         step: &Self::Step,
         data: &mut Self::Data,
         ctx: &CaptureContext
-    ) -> Result<CaptureStepOutput, CaptureError> {
+    ) {
         let sequence_capture = CaptureBuilder::new(SequenceCapture {
             capture_settings: self.capture_settings,
             exposure_time: self.exp_times,

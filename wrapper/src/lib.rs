@@ -256,6 +256,27 @@ pub struct SLDevice {
     device: UniquePtr<sldevice_ffi::SLDevice>,
 }
 
+pub trait Device: Send + Sync {
+    fn register_read(&mut self, address: RegisterAddress, sensor_sum: u32) -> i32;
+    fn open_camera(&mut self) -> Result<(), SLError>;
+    fn close_camera(&mut self) -> Result<(), SLError>;
+    fn is_connected(&mut self) -> bool;
+    fn start_stream(&mut self) -> Result<(), SLError>;
+    fn stop_stream(&mut self) -> Result<(), SLError>;
+    fn software_trigger(&mut self) -> Result<(), SLError>;
+    fn set_number_of_frames(&mut self, frames: u32) -> Result<(), SLError>;
+    fn set_full_well_mode(&mut self, full_well_mode: FullWellModes) -> Result<(), SLError>;
+    fn get_roi(&mut self) -> Result<ROI, SLError>;
+    fn set_roi(&mut self, roi: ROI) -> Result<(), SLError>;
+    fn measure_temperature(&mut self, sensor: u32) -> Result<f32, SLError>;
+    fn get_image_dims(&mut self) -> Result<(u32, u32), SLError>;
+    fn set_exposure_mode(&mut self, exposure_mode: sldevice_ffi::ExposureModes) -> Result<(), SLError>;
+    fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError>;
+    fn set_dds(&mut self, dds_on: bool) -> Result<(), SLError>;
+    fn set_test_mode(&mut self, test_mode_on: bool) -> Result<(), SLError>;
+    fn acquire_image(&mut self, buffer: &mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError>;
+}
+
 impl SLDevice {
     pub fn new(interface: DeviceInterface) -> Result<Self, String> {
         match sldevice_ffi::constuct_sldevice_with_interface(interface) {
@@ -286,44 +307,46 @@ impl SLDevice {
     pub fn scan_cameras() -> Result<Vec<SLDeviceInfo>, Exception> {
         sldevice_ffi::scan_cameras()
     }
+}
 
-    pub fn register_read(&mut self, address: RegisterAddress, sensor_sum: u32) -> i32 {
+impl Device for SLDevice {
+    fn register_read(&mut self, address: RegisterAddress, sensor_sum: u32) -> i32 {
         self.device.pin_mut().RegisterRead(address.0 as i32, sensor_sum as i32)
     }
 
-    pub fn open_camera(&mut self) -> Result<(), SLError> {
+    fn open_camera(&mut self) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().OpenCamera(100))
     }
 
-    pub fn close_camera(&mut self) -> Result<(), SLError> {
+    fn close_camera(&mut self) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().CloseCamera())
     }
 
-    pub fn is_connected(&mut self) -> bool {
+    fn is_connected(&mut self) -> bool {
         self.device.pin_mut().IsConnected()
     }
 
-    pub fn start_stream(&mut self) -> Result<(), SLError> {
+    fn start_stream(&mut self) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().StartStream())
     }
 
-    pub fn stop_stream(&mut self) -> Result<(), SLError> {
+    fn stop_stream(&mut self) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().StopStream())
     }
 
-    pub fn software_trigger(&mut self) -> Result<(), SLError> {
+    fn software_trigger(&mut self) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SoftwareTrigger())
     }
 
-    pub fn set_number_of_frames(&mut self, frames: u32) -> Result<(), SLError> {
+    fn set_number_of_frames(&mut self, frames: u32) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetNumberOfFrames(frames as i32))
     }
 
-    pub fn set_full_well_mode(&mut self, full_well_mode: FullWellModes) -> Result<(), SLError> {
+    fn set_full_well_mode(&mut self, full_well_mode: FullWellModes) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetFullWell(full_well_mode))
     }
 
-    pub fn get_roi(&mut self) -> Result<ROI, SLError> {
+    fn get_roi(&mut self) -> Result<ROI, SLError> {
         let mut roi = ROI::default();
         match self.device.pin_mut().GetROI(&mut roi) {
             SLError::SL_ERROR_SUCCESS => Ok(roi),
@@ -331,11 +354,11 @@ impl SLDevice {
         }
     }
 
-    pub fn set_roi(&mut self, roi: ROI) -> Result<(), SLError> {
+    fn set_roi(&mut self, roi: ROI) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetROI(roi))
     }
 
-    pub fn measure_temperature(&mut self, sensor: u32) -> Result<f32, SLError> {
+    fn measure_temperature(&mut self, sensor: u32) -> Result<f32, SLError> {
         let mut temp = 0.;
         match self.device.pin_mut().MeasureTemperature(&mut temp, sensor as i32) {
             SLError::SL_ERROR_SUCCESS => Ok(temp),
@@ -343,7 +366,7 @@ impl SLDevice {
         }
     }
 
-    pub fn get_image_dims(&mut self) -> Result<(u32, u32), SLError> {
+    fn get_image_dims(&mut self) -> Result<(u32, u32), SLError> {
         let (x, y) = (self.device.pin_mut().GetImageXDim(), self.device.pin_mut().GetImageYDim());
         if x == -1 || y == -1 {
             Err(SLError::SL_ERROR_INTERNAL)
@@ -352,23 +375,23 @@ impl SLDevice {
         }
     }
 
-    pub fn set_exposure_mode(&mut self, exposure_mode: sldevice_ffi::ExposureModes) -> Result<(), SLError> {
+    fn set_exposure_mode(&mut self, exposure_mode: sldevice_ffi::ExposureModes) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetExposureMode(exposure_mode))
     }
 
-    pub fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError> {
+    fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetExposureTime(exposure_time.as_millis() as i32))
     }
 
-    pub fn set_dds(&mut self, dds_on: bool) -> Result<(), SLError> {
+    fn set_dds(&mut self, dds_on: bool) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetDDS(dds_on))
     }
 
-    pub fn set_test_mode(&mut self, test_mode_on: bool) -> Result<(), SLError> {
+    fn set_test_mode(&mut self, test_mode_on: bool) -> Result<(), SLError> {
         slerror_to_result(self.device.pin_mut().SetTestMode(test_mode_on))
     }
 
-    pub fn acquire_image(&mut self, buffer: &mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
+    fn acquire_image(&mut self, buffer: &mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError> {
         let buffer_info;
         unsafe {
             buffer_info = self.device.pin_mut().AcquireImage(buffer.as_mut_ptr() as *mut u16,

@@ -11,7 +11,7 @@
   
   <div
     use:melt={$root}
-    class="relative h-72 w-56 overflow-hidden text-white"
+    class="relative h-72 w-56 overflow-hidden"
   >
     <div use:melt={$viewport} class="h-full w-full rounded-[inherit]">
       <div use:melt={$content}>

@@ -1,9 +1,8 @@
 <script lang="ts">
-    import { createSelect, createSync, melt } from "@melt-ui/svelte"
+    import { createSelect, melt } from "@melt-ui/svelte"
   
     export let name: string
     export let labels: string[];
-    export let a: string;
   
     const {
       elements: { trigger, menu, option },
@@ -22,7 +21,7 @@
     {name}: 
     <div class="flex-1 flex-col gap-1">
         <button
-            class="flex h-10 min-w-[220px] items-center justify-between bg-gray-900 px-3 py-2
+            class="flex h-10 min-w-[220px] items-center justify-between px-3 py-2
             text-magnum-700 shadow transition-opacity hover:opacity-70"
             use:melt={$trigger}
         >

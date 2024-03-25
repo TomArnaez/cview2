@@ -1,47 +1,46 @@
-use std::path::PathBuf;
-
-use image::{ImageBuffer, ImageFormat, Luma};
+use std::{path::PathBuf, sync::Arc};
+use image::{imageops::thumbnail, EncodableLayout, ImageBuffer, ImageFormat, Luma};
 use serde::Serialize;
-use specta::Type;
+use tauri::image::Image;
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use super::manager::ImageId;
+use super::{error::ImageManagerError, manager::ImageId, roi::{PixelIterable, Point, ROI}};
 
 // Typescript representation of an image
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TsImage {
     pub id: ImageId,
-    pub width: u32,
-    pub height: u32,
+    pub width: usize,
+    pub height: usize,
 }
-
+#[derive(Debug)]
 pub enum ImageVariant {
     ImageU16(ImageU16),
 }
 
+#[derive(Debug)]
 pub struct ImageU16 {
     pub buffer: ImageBuffer<Luma<u16>, Vec<u16>>,
 }
 
-pub struct ImageU32 {
-    buffer: ImageBuffer<Luma<u32>, Vec<u32>>,
-}
-
-pub struct ImageHandler {
+pub struct ImageProcessor {
     id: ImageId,
-    image: ImageVariant,
+    image: Arc<ImageVariant>,
+    senders: Vec<broadcast::Sender<Arc<ImageVariant>>>
 }
 
-impl ImageHandler {
-    pub fn new(image: ImageVariant) -> Self {
+impl ImageProcessor {
+    pub fn new(image: Arc<ImageVariant>) -> Self {
         Self {
             id: Uuid::new_v4(),
             image,
+            senders: Vec::new()
         }
     }
 
     pub fn save_image(&self, path: PathBuf, format: ImageFormat) {
-        match &self.image {
+        match self.image.as_ref() {
             ImageVariant::ImageU16(img) => img.buffer.save_with_format(path, format).unwrap(),
         }
     }
@@ -50,39 +49,87 @@ impl ImageHandler {
         self.id
     }
 
-    pub fn get_image(&self) -> &ImageVariant {
-        &self.image
+    pub fn buffer(&self) -> Arc<ImageVariant> {
+        self.image.clone()
     }
 
-    pub fn get_image_mut(&mut self) -> &mut ImageVariant {
-        &mut self.image
-    }
-
-    pub fn get_width(&self) -> u32 {
-        match &self.image {
-            ImageVariant::ImageU16(img) => img.buffer.width(),
-            //ImageVariant::ImageU32(img) => img.buffer.width(),
+    pub fn width(&self) -> usize {
+        match self.image.as_ref() {
+            ImageVariant::ImageU16(img) => img.buffer.width() as usize,
         }
     }
 
-    pub fn get_height(&self) -> u32 {
-        match &self.image {
-            ImageVariant::ImageU16(img) => img.buffer.height(),
-            //ImageVariant::ImageU32(img) => img.buffer.height(),
+    pub fn height(&self) -> usize {
+        match self.image.as_ref() {
+            ImageVariant::ImageU16(img) => img.buffer.height() as usize,
         }
     }
 
-    pub fn get_ts_image(&self) -> TsImage {
+    pub fn ts_image(&self) -> TsImage {
         TsImage {
             id: self.id,
-            width: self.get_width(),
-            height: self.get_height(),
+            width: self.width(),
+            height: self.height()
+        }
+    }
+
+    // pub fn thumbnail(&self, width: usize, height: usize) -> Result<Image<'static>, ImageManagerError> {
+    //     if width > self.height() || height < self.height() {
+    //         return Err(ImageManagerError::OutOfBounds);
+    //     }
+    //     match self.image.as_ref() {
+    //         ImageVariant::ImageU16(img) => {
+    //             return Ok(Image::new_owned(thumbnail(&img.buffer, width, height).as_bytes().to_vec(), width, height));
+    //         }
+    //     }
+    // }
+
+    pub fn iter(&self, roi: ROI) -> ImageIterator {
+        ImageIterator {
+            image: self.image.clone(),
+            coord_iterator: roi.pixels()
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Type)]
-pub struct ImageDetails {
-    width: u32,
-    height: u32,
+pub struct ImageIterator {
+    image: Arc<ImageVariant>,
+    coord_iterator: Box<dyn Iterator<Item=Point>>
 }
+
+impl ImageIterator {
+    pub fn new(image: Arc<ImageVariant>, iterable: ROI) -> Self {
+        Self {
+            image,
+            coord_iterator: iterable.pixels()
+        }
+    }
+}
+
+impl Iterator for ImageIterator {
+    type Item = u16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(point) = self.coord_iterator.next() {
+            match self.image.as_ref() {
+                ImageVariant::ImageU16(img) => {
+                    return Some(img.buffer.get_pixel(point.x, point.y)[0])
+                }
+            }
+        }
+
+        return None
+    }
+}
+
+// impl Viewable for ImageHandler {
+//     fn register_channel(&mut self, sender: broadcast::Sender<Arc<ImageVariant>>) {
+//         sender.send(self.image.clone());
+//         self.senders.push(sender);
+//     }
+
+//     fn image_size(&self) -> (usize, usize) {
+//         (self.height() as usize, self.width() as usize)
+//     }
+
+// }

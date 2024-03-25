@@ -12,14 +12,19 @@ pub enum ImageManagerError {
 
     #[error("image file error")]
     ImageFileError(ImageFileError),
+
+    #[error("Out of bounds")]
+    OutOfBounds,
 }
 
 #[derive(Debug, Error, Serialize, Type)]
 pub enum ImageFileError {
     #[error("couldn't open file at {0:?}")]
     CannotOpenFile(PathBuf),
+
     #[error("TIFF error")]
     TIFFError,
+
     #[error("Unsupported format")]
     UnsupportedFormat,
 }
@@ -27,5 +32,11 @@ pub enum ImageFileError {
 #[derive(Debug, Error, Serialize)]
 pub enum ImageViewError {
     #[error("couldn't open image view with id {0:?}")]
-    ImageViewNotFound(ImageViewId)
+    ImageViewNotFound(ImageViewId),
+    
+    #[error("No image data available")]
+    NoImageAvailable,
+
+    #[error("couldn't set slice to {0:?}")]
+    SliceOutOfRange(usize),
 }

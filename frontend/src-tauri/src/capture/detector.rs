@@ -6,15 +6,12 @@ use tauri::{async_runtime::block_on, AppHandle};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use uuid::Uuid;
 use wrapper::{
-    DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice,
-    SLDeviceInfo, SLError, SLImage, ROI,
+    Device, DeviceInterface, ExposureModes, FullWellModes, SLBufferInfo, SLDevice, SLDeviceInfo, SLError, SLImage, ROI
 };
 
 use crate::capture::error::CaptureError;
 use crate::capture::report::CaptureStatus;
-use crate::{
-    event::{self, Event},
-};
+use crate::event::{self, Event};
 
 use super::capture::StatefulCapture;
 use super::capture_modes::CaptureContext;
@@ -48,11 +45,11 @@ enum DetectorMessage {
     StopStream(oneshot::Sender<Result<(), SLError>>),
 }
 
-struct DetectorActor {
-    detector: SLDevice,
+struct DetectorActor<T: Device> {
+    detector: T,
 }
 
-impl DetectorActor {
+impl<T: Device> DetectorActor<T> {
     async fn run(mut self, mut receiver: mpsc::Receiver<DetectorMessage>) {
         while let Some(message) = receiver.recv().await {
             match message {
@@ -128,7 +125,7 @@ impl DetectorHandle {
         })
     }
 
-    fn setup(detector: DetectorActor) -> DetectorHandle {
+    fn setup<T: Device + 'static>(detector: DetectorActor<T>) -> DetectorHandle {
         let (sender, receiver) = mpsc::channel(8);
         std::thread::spawn(|| block_on(detector.run(receiver)));
         Self { sender }

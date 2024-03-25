@@ -67,7 +67,7 @@ impl StatefulCapture for SequenceCapture {
         step: &Self::Step,
         data: &mut Self::Data,
         ctx: &CaptureContext
-    ) -> Result<CaptureStepOutput, CaptureError> {
+    ) {
         let dims = ctx.detector_handle.get_image_dims().await.unwrap();
         let vec = vec![0u16; (dims.0 * dims.1) as usize];
         ctx.detector_handle.acquire_image(vec, None).await.unwrap();

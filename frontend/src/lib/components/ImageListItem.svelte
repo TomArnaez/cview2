@@ -1,12 +1,9 @@
 <script lang="ts">
-    import type { ImageDetails } from "../../bindings";
+    import type { View } from "../images/types";
 
-    export let image: ImageDetails;
-    export let isSelected: boolean
+    export let view: View;
+    export let isSelected: boolean;
 </script>
-
-{#if isSelected}
-    height: {image.height}, width: {image.width}
-{:else}
-    Bye
-{/if}
+<div class="{isSelected ? 'bg-blue-300' : 'bg-neutral-50'} border border-black">
+    width: {view.height}, height: {view.width}
+</div>

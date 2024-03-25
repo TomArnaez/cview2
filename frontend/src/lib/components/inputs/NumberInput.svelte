@@ -12,5 +12,5 @@
     step={step}
     id="numberInput"
     bind:value={value}
-    class="form-input border border-gray-300 bg-gray-600 text-gray-700 shadow-sm"
+    class="form-input border border-gray-300shadow-sm"
 />

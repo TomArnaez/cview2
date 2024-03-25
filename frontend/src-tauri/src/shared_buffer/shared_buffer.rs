@@ -1,7 +1,7 @@
 use log::error;
 use serde::{ser::SerializeStruct, Serialize};
 use specta::Type;
-use std::ops::{Deref, DerefMut};
+use std::{ops::{Deref, DerefMut}, sync::{Arc, Mutex}};
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -40,12 +40,19 @@ impl HasTypeTag for u32 {
     }
 }
 
+#[derive(Debug)]
+struct SharedBufferInner {
+    shared_buffer: ICoreWebView2SharedBuffer,
+}
+
+unsafe impl Send for SharedBufferInner {}
+
 #[derive(Debug, Type)]
 pub struct SharedBuffer<T: HasTypeTag> {
     uuid: Uuid,
     len: usize,
     #[specta(skip)]
-    shared_buffer: ICoreWebView2SharedBuffer,
+    inner: Arc<Mutex<SharedBufferInner>>,
     buffer: *mut T,
 }
 
@@ -63,11 +70,12 @@ impl<T: HasTypeTag> Serialize for SharedBuffer<T> {
 }
 
 unsafe impl<T: HasTypeTag> Send for SharedBuffer<T> {}
+unsafe impl<T: HasTypeTag> Sync for SharedBuffer<T> {}
 
 impl<T: HasTypeTag> Drop for SharedBuffer<T> {
     fn drop(&mut self) {
         unsafe {
-            self.shared_buffer.Close().unwrap();
+            self.inner.lock().unwrap().shared_buffer.Close().unwrap();
         }
     }
 }
@@ -102,15 +110,22 @@ impl<T: HasTypeTag + 'static> SharedBuffer<T> {
                 match tx.send(SharedBuffer {
                     uuid,
                     len,
-                    shared_buffer,
+                    inner: Arc::new(Mutex::new(SharedBufferInner { shared_buffer })),
                     buffer: buffer as *mut T
                 }) {
                     Err(_) => error!("Failed to send shared buffer"),
                     _ => {}
                 }
             }).unwrap();
-
         rx.blocking_recv().unwrap()
+    }
+
+    pub fn post_to_frontend<R: Runtime>(&self, app: AppHandle<R>, content: String) {
+        let inner = Arc::clone(&self.inner);
+        app.get_webview_window("main").unwrap().with_webview(move |webview| {
+            let webview2 = unsafe {webview.controller().CoreWebView2() }.unwrap().cast::<ICoreWebView2_19>().unwrap();
+            unsafe {webview2.PostSharedBufferToScript(&inner.lock().unwrap().shared_buffer, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE, PCWSTR(HSTRING::from(content).as_ptr())).unwrap();}
+        });
     }
 }
 
