@@ -1,15 +1,16 @@
-use std::{sync::Mutex, time::Duration};
-use tauri::Manager;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use wrapper::{ExposureModes, SLImage};
 use async_trait::async_trait;
-use crate::capture::{capture::{CaptureSettings, CaptureStepOutput, JobInitOutput, StatefulCapture}, error::CaptureError, report::CaptureReportUpdate};
-
+use crate::capture::{capture::{CaptureSettings, JobInitOutput, StatefulCapture}, error::CaptureError, report::CaptureReportUpdate};
 use super::{helpers::configure_device_for_capture, CaptureContext};
 
+#[derive(Debug, Deserialize, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct SequenceCapture {
     pub capture_settings: CaptureSettings,
     pub frame_count: usize,
-    pub exposure_time: Duration,
+    pub exposure_time: u32,
     pub corrected: bool,
 }
 
@@ -72,8 +73,8 @@ impl StatefulCapture for SequenceCapture {
         let vec = vec![0u16; (dims.0 * dims.1) as usize];
         ctx.detector_handle.acquire_image(vec, None).await.unwrap();
 
-        let correction_images = ctx.correction_images.lock().await;
-        let frame = &mut data.frames[step.frame];
+        // let correction_images = ctx.correction_images.lock().await;
+        // let frame = &mut data.frames[step.frame];
         
         ctx.events_tx
             .send(CaptureReportUpdate::CompletedTaskCount(step.frame))

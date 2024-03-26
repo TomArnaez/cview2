@@ -1,10 +1,11 @@
 use serde::Serialize;
+use specta::Type;
 use thiserror::Error;
 use wrapper::SLError;
 
 use super::DetectorId;
 
-#[derive(Error, Debug, Serialize)]
+#[derive(Error, Debug, Serialize, Type)]
 pub enum DetectorControllerError {
     #[error("Capture in progress")]
     CaptureInProgress,

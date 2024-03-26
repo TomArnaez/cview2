@@ -6,7 +6,7 @@ use super::{sequence::SequenceCapture, CaptureContext};
 
 pub struct SignalAccumulationCapture {
     pub capture_settings: CaptureSettings,
-    pub exp_times: Duration,
+    pub exp_times: u32,
     pub frame_count: usize
 }
 

@@ -5,4 +5,4 @@ mod detector;
 mod error;
 mod report;
 
-pub use detector::{CaptureProgressEvent, DetectorId, DetectorManager, DetectorStatus, TsDetector};
+pub use detector::{DetectorId, DetectorController, DetectorStatus, TsDetector};

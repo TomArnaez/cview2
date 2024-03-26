@@ -1,22 +1,30 @@
 import { writable } from "svelte/store";
-import type { CaptureMode, Detector } from "./types";
+import type { Detector } from "./types";
 import { invoke, listen } from "../backend/ipc";
+import type { CaptureSettings, SequenceCapture } from "../../bindings";
 
 export async function createDetectorService() {
     const { subscribe, set } = writable<Detector[]>([]);
 
-    set(await listDetectors());
+    let values = await listAllDetectors();
+    if (values != null && values?.length > 0) {
+        await runCapture(values[0].id)
+    }
 
-    subscribe(dets => {
-        console.log(dets)
-    })
-
-    async function runCapture(detectorId: string, capture: CaptureMode) {
-        try {
-            await invoke<any>("run_capture", {detector_id: detectorId, capture});
-        } catch (e: any) {
-            console.log(e);
+    async function runCapture(detectorId: string) {
+        let captureSettings: CaptureSettings = {
+            dds: false,
+            fullWellMode: "Low",
+            roi: { x: 0, y: 0, w: 300, h: 300},
+            testMode: false,
         }
+        let capture: SequenceCapture = {
+            captureSettings,
+            corrected: false,
+            exposureTime: 100,
+            frameCount: 10
+        }
+        await invoke<any>("run_capture", { id: detectorId, capture });
     }
 
     async function cancelCapture(detectorId: string) {
@@ -38,8 +46,8 @@ export async function createDetectorService() {
     return { subscribe }
 }
 
-async function listDetectors(): Promise<Detector[]> {
-    return await invoke<Detector[]>("list_all_detectors");
+async function listAllDetectors(): Promise<Detector[] | null> {
+    return invoke<Detector[]>("list_all_detectors");
 }
 
 function subscribeToDetectors(callback: (detectors: Detector[]) => void) {

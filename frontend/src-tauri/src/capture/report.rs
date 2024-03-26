@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
@@ -9,7 +9,7 @@ pub enum CaptureReportUpdate {
     Message(String),
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
 pub struct CaptureReport {
     pub id: Uuid,
     pub name: String,
@@ -21,7 +21,7 @@ pub struct CaptureReport {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Type)]
 pub enum CaptureStatus {
     Initialised,
     Running,

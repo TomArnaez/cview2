@@ -4,33 +4,39 @@ use super::{
 use log::info;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{collections::VecDeque, sync::Arc};
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
 use wrapper::{FullWellModes, ROI};
 
-pub struct Capture<Capture: StatefulCapture> {
-    id: Uuid,
-    report: CaptureReport,
-    state: Option<CaptureState<Capture>>,
+pub enum CaptureProgressEvent<T: StatefulCapture> {
+    ProgressEvent,
+    Completed(T::Result),
+    Error
 }
 
-impl<SJob: StatefulCapture> Capture<SJob> {
-    pub fn new(init: SJob) -> Self {
+pub struct Capture<T: StatefulCapture> {
+    id: Uuid,
+    report: CaptureReport,
+    state: Option<CaptureState<T>>,
+}
+
+impl<T: StatefulCapture> Capture<T> {
+    pub fn new(init: T) -> Self {
         CaptureBuilder::new(init).build()
     }
 }
 
-pub struct CaptureBuilder<SJob: StatefulCapture> {
+pub struct CaptureBuilder<T: StatefulCapture> {
     id: Uuid,
-    init: SJob,
+    init: T,
     report_builder: CaptureReportBuilder,
 }
 
-impl<SJob: StatefulCapture> CaptureBuilder<SJob> {
-    pub fn build(self) -> Capture<SJob> {
-        Capture::<SJob> {
+impl<T: StatefulCapture> CaptureBuilder<T> {
+    pub fn build(self) -> Capture<T> {
+        Capture::<T> {
             id: self.id,
             report: self.report_builder.build(),
             state: Some(CaptureState {
@@ -42,20 +48,20 @@ impl<SJob: StatefulCapture> CaptureBuilder<SJob> {
         }
     }
 
-    pub fn new(init: SJob) -> Self {
+    pub fn new(init: T) -> Self {
         let id = Uuid::new_v4();
         Self {
             id,
             init,
-            report_builder: CaptureReportBuilder::new(id, SJob::NAME.to_string()),
+            report_builder: CaptureReportBuilder::new(id, T::NAME.to_string()),
         }
     }
 }
 
-pub struct CaptureState<Capture: StatefulCapture> {
-    pub init: Capture,
-    pub data: Option<Capture::Data>,
-    pub steps: VecDeque<Capture::Step>,
+pub struct CaptureState<T: StatefulCapture> {
+    pub init: T,
+    pub data: Option<T::Data>,
+    pub steps: VecDeque<T::Step>,
     pub step_number: usize,
 }
 
@@ -63,7 +69,7 @@ pub struct CaptureState<Capture: StatefulCapture> {
 pub trait StatefulCapture: Send + Sync + 'static {
     type Data: Send + Sync;
     type Step: Send + Sync;
-    type Result;
+    type Result: Send;
 
     const NAME: &'static str;
 
@@ -183,11 +189,9 @@ async fn handle_init_phase<SJob: StatefulCapture>(
             return result.unwrap();
         },
         Ok(_) = commands_rx.changed() => {
-            println!("got cancel event init");
             match *commands_rx.borrow() {
                 CaptureCommand::Cancel => {
                     init_task.abort();
-                    info!("Cancelling Job");
                     return Err(CaptureError::Canceled);
                 },
             }
@@ -222,10 +226,11 @@ pub enum CaptureCommand {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct CaptureSettings {
     pub dds: bool,
     pub full_well_mode: FullWellModes,
     pub roi: ROI,
     pub test_mode: bool,
-    pub timeout: Duration,
+    //pub timeout: Duration,
 }

@@ -1,27 +1,10 @@
+import type { CaptureReport, DetectorSpecification, DetectorStatus, Duration } from "../../bindings";
+
 export type Detector = {
     id: string,
-    specification: DetectorSpecification,
     status: DetectorStatus,
+    specification: DetectorSpecification,
     defectMap: boolean,
-    darkMapExposures: number[]
+    darkMapExposures: Duration[],
+    captureReport: CaptureReport | null
 };
-
-export type DetectorSpecification = {
-    width: number,
-    height: number
-}
-
-export type DetectorStatus = "Idle" | "Disconnected" | "Capturing";
-
-export type CaptureMode = 
-    | ({ type: "StreamCapture" } & StreamCapture) 
-    | ({ type: "SignalAccumulationCapture" } & SignalAccumulationCapture) 
-
-export type SignalAccumulationCapture = {
-    expTimes: number[],
-    frames: number,
-}
-
-export type StreamCapture = {
-    expTime: number,
-}

@@ -5,7 +5,7 @@ use log::info;
 use thiserror::Error;
 
 use crate::{
-    capture::DetectorManager,
+    capture::DetectorController,
     task::{task::InterruptionRequest, worker::Worker},
 };
 
