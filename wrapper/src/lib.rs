@@ -271,7 +271,7 @@ pub trait Device: Send + Sync {
     fn measure_temperature(&mut self, sensor: u32) -> Result<f32, SLError>;
     fn get_image_dims(&mut self) -> Result<(u32, u32), SLError>;
     fn set_exposure_mode(&mut self, exposure_mode: sldevice_ffi::ExposureModes) -> Result<(), SLError>;
-    fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError>;
+    fn set_exposure_time(&mut self, exposure_time: u32) -> Result<(), SLError>;
     fn set_dds(&mut self, dds_on: bool) -> Result<(), SLError>;
     fn set_test_mode(&mut self, test_mode_on: bool) -> Result<(), SLError>;
     fn acquire_image(&mut self, buffer: &mut [u16], timeout: Option<Duration>) -> Result<SLBufferInfo, SLError>;
@@ -379,8 +379,8 @@ impl Device for SLDevice {
         slerror_to_result(self.device.pin_mut().SetExposureMode(exposure_mode))
     }
 
-    fn set_exposure_time(&mut self, exposure_time: Duration) -> Result<(), SLError> {
-        slerror_to_result(self.device.pin_mut().SetExposureTime(exposure_time.as_millis() as i32))
+    fn set_exposure_time(&mut self, exposure_time: u32) -> Result<(), SLError> {
+        slerror_to_result(self.device.pin_mut().SetExposureTime(exposure_time as i32))
     }
 
     fn set_dds(&mut self, dds_on: bool) -> Result<(), SLError> {
