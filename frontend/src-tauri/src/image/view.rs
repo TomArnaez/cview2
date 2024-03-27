@@ -1,9 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use log::info;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use uuid::Uuid;
-use crate::shared_buffer::SharedBuffer;
+use crate::{capture::CaptureReport, shared_buffer::SharedBuffer};
 use super::{error::ImageViewError, image::ImageVariant, stack::ImageStack};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -97,14 +97,6 @@ impl Default for ImageViewSettings {
     }
 }
 
-#[derive(Debug)]
-struct ImageViewInner {
-    shared_buffer: SharedBuffer<u8>,
-    stack: Arc<ImageStack>,
-    current_slice: Arc<ImageVariant>,
-    settings: ImageViewSettings
-}
-
 pub struct ImageView {
     id: ImageViewId,
     shared_buffer: SharedBuffer<u8>,
@@ -114,12 +106,11 @@ pub struct ImageView {
     slice: usize,
     width: usize,
     height: usize,
-    depth: usize
+    depth: usize,
 }
 
 impl ImageView {
     pub fn new(app: AppHandle, settings: ImageViewSettings, stack: Arc<ImageStack>) -> Self  {
-
         let width = stack.width();
         let height = stack.height();
         let depth = stack.depth();

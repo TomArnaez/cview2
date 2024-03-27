@@ -1,17 +1,66 @@
 use super::{
-    capture_modes::CaptureContext, error::CaptureError, report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate}
+    capture_modes::CaptureContext, detector::DetectorState, error::CaptureError, report::{CaptureReport, CaptureReportBuilder, CaptureReportUpdate}
 };
 use log::info;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
 use wrapper::{FullWellModes, ROI};
 
+type CaptureId = Uuid;
+
+struct CaptureTask {
+    id: CaptureId,
+    handle: JoinHandle<()>
+}
+
+trait CaptureService {
+    fn new() -> Self;
+    fn perform_capture<T: StatefulCapture>(&mut self, detector: DetectorState, capture: T);
+    fn cancel_capture(&self, id: CaptureId);
+    fn list_all_captures(&self) -> Vec<CaptureReport>;
+}
+
+struct BaseCaptureService {
+    capture_reports: HashMap<CaptureId, CaptureReport>,
+    capture_tasks: HashMap<CaptureId, CaptureTask>
+}
+
+impl CaptureService for BaseCaptureService {
+    fn new() -> Self {
+        Self {
+            capture_reports: HashMap::new(),
+            capture_tasks: HashMap::new()
+        }
+    }
+
+    fn perform_capture<T: StatefulCapture>(&mut self, detector: DetectorState, capture: T) {
+        let mut capture = CaptureBuilder::new(capture).build();
+
+        let handle = tauri::async_runtime::spawn(async move {
+        });
+
+        let capture_task = CaptureTask {
+            id: CaptureId::new_v4(),
+            handle
+        };
+
+        self.capture_tasks.insert(capture_task.id, capture_task);
+    }
+
+    fn cancel_capture(&self, id: CaptureId) {
+    }
+
+    fn list_all_captures(&self) -> Vec<CaptureReport> {
+        self.capture_reports.values().cloned().collect()
+    }
+}
+
 pub enum CaptureProgressEvent<T: StatefulCapture> {
-    ProgressEvent,
+    ProgressEvent(CaptureReport),
     Completed(T::Result),
     Error
 }
@@ -173,11 +222,6 @@ impl<SJob: StatefulCapture> Capture<SJob> {
 pub struct JobInitOutput<Step, Data> {
     pub data: Data,
     pub steps: VecDeque<Step>,
-}
-
-pub struct CaptureStepOutput {
-    pub request_input: Option<String>
-
 }
 
 async fn handle_init_phase<SJob: StatefulCapture>(

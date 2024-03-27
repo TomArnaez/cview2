@@ -1,7 +1,6 @@
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use futures::future::FutureExt;
 use tokio::pin;
 use std::{collections::HashMap, sync::Arc};
 use std::time::Duration;
@@ -343,7 +342,6 @@ pub struct DetectorState {
     id: DetectorId,
     detector_handle: DetectorHandle,
     specification: DetectorSpecification,
-    heartbeat_handle: tauri::async_runtime::JoinHandle<()>,
     inner: Arc<Mutex<DetectorStateInner>>,
     status_tx: mpsc::Sender<DetectorStatus>,
     capture_cmd_tx: Option<watch::Sender<CaptureCommand>>,
@@ -409,39 +407,10 @@ impl DetectorState {
             detector_status,
         }));
 
-        let heartbeat_handle = {
-            let detector_handle = detector_handle.clone();
-            let inner = inner.clone();
-            let status_tx = status_tx.clone();
-            tauri::async_runtime::spawn(async move {
-                info!("Heartbeat thread started for {:?}", interface);
-                loop {
-                    let mut inner_lock = inner.lock().await;
-                    inner_lock.detector_status = DetectorStatus::Idle;
-                    match inner_lock.detector_status {
-                        DetectorStatus::Disconnected => {
-                            let detector_handle = detector_handle.clone();
-                            if detector_handle.open_camera().await.is_ok() {
-                                inner_lock.detector_status = DetectorStatus::Idle;
-                            }
-                        }
-                        _ => {
-                            if !detector_handle.is_connected().await {
-                                inner_lock.detector_status = DetectorStatus::Disconnected;
-                            }
-                        }
-                    }
-                    //status_tx.send(inner_lock.detector_status.clone()).await.unwrap();
-                    std::thread::sleep(HEARTBEAT_PERIOD)
-                }
-            })
-        };
-
         Ok(DetectorState {
             id,
             detector_handle,
             specification,
-            heartbeat_handle,
             inner,
             status_tx,
             capture_cmd_tx: None,
@@ -469,6 +438,13 @@ impl DetectorState {
             dark_map_exposures: correction_images.dark_maps.keys().cloned().collect(),
             capture_report: self.capture_report()
         }
+    }
+
+    pub async fn run<F>(&mut self, f: F) 
+    where 
+        F: FnOnce(DetectorCaptureHandle)
+    {
+        f(DetectorCaptureHandle::new(self.detector_handle.clone()))
     }
 
     pub async fn run_capture<T: StatefulCapture>(
@@ -511,6 +487,7 @@ impl DetectorState {
                             Ok(report_update) = events_rx.recv() => {
                                 info!("Capture<id='{}, name='{}'> received update {:?}", report.id, report.name, report_update);
                                 Self::handle_capture_progresss(app.clone(), &mut report, report_update, &report_watch_tx);
+                                result_tx.send(CaptureProgressEvent::ProgressEvent(report.clone())).await.expect("Failed to send progress event");
                             }
                             capture_output = &mut capture_future => {
                                 match capture_output {
@@ -563,7 +540,7 @@ impl DetectorState {
         app: AppHandle,
         report: &mut CaptureReport,
         update: CaptureReportUpdate,
-        report_watch_tx: &watch::Sender<CaptureReport>
+        report_watch_tx: &watch::Sender<CaptureReport>,
     ) {
         match update {
             CaptureReportUpdate::TaskCount(task_count) => report.task_count = task_count,

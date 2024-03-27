@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize, Serializer};
-use specta::Type;
 use tokio::sync::mpsc;
 use log::info;
 use tauri::{ipc::Channel, AppHandle, State};
 use tokio::sync::Mutex;
-use super::{capture_modes::SequenceCapture, error::DetectorControllerError, DetectorController, DetectorId, TsDetector};
+use super::{capture::CaptureProgressEvent, capture_modes::SequenceCapture, error::DetectorControllerError, DetectorController, DetectorId, TsDetector};
 
 #[tauri::command]
 #[specta::specta]
@@ -29,16 +27,26 @@ pub async fn run_capture_chan(
     controller: State<'_, Mutex<DetectorController>>, 
     id: DetectorId,
     capture: SequenceCapture,
-    channel: Channel
+    frontend_channel: Channel
 ) -> Result<(), DetectorControllerError> {
     info!("Received run_capture command <id={id}, capture={:?}>", capture);
-    let (tx,mut rx) = mpsc::channel(10);
+
+    let (tx, mut rx) = mpsc::channel(10);
     controller.lock().await.run_capture(app, id, capture, tx).await?;
 
     tauri::async_runtime::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            println!("got msg");
-            channel.send("test");
+        while let Some(event) = rx.recv().await {
+            match event {
+                CaptureProgressEvent::Error => {
+
+                },
+                CaptureProgressEvent::Completed(results) => {
+                    println!("Got results of length {:?}", results.len());
+                },
+                CaptureProgressEvent::ProgressEvent(report) => {
+                    frontend_channel.send(report);
+                }
+            }
         }
     });
 

@@ -1,8 +1,7 @@
 use std::{sync::Arc};
-use tiff::encoder::{colortype, TiffEncoder};
 use uuid::Uuid;
 use chrono::prelude::{DateTime, Utc};
-use super::{error::ImageManagerError, image::{ImageProcessor, ImageVariant, TsImage}};
+use super::{error::ImageManagerError, image::{ImageVariant, TsImage}};
 
 pub type ImageStackId = Uuid;
 
@@ -10,7 +9,6 @@ pub type ImageStackId = Uuid;
 pub struct ImageStack {
     id: ImageStackId,
     images: Vec<Arc<ImageVariant>>,
-    timestamp: Option<DateTime<Utc>>,
     width: usize,
     height: usize
 }
@@ -21,7 +19,6 @@ impl ImageStack {
         Self {
             id: ImageStackId::new_v4(),
             images,
-            timestamp,
             width,
             height
         }
@@ -62,20 +59,6 @@ impl ImageStack {
         self.images.get(idx)
     }
 
-    // pub fn save_stack(&self, path: PathBuf) {
-    //     let mut img_file = File::open(path).unwrap();
-    //     let mut img_encoder = TiffEncoder::new(&mut img_file).unwrap();
-        
-    //     for handler in &self.images {
-    //         let image = handler.buffer();
-    //         match image.as_ref() {
-    //             super::image::ImageVariant::ImageU16(data) => {
-    //                 img_encoder.write_image::<colortype::Gray16>(handler.width() as u32, handler.height() as u32, data.buffer.as_raw()).unwrap();
-    //             },
-    //         }
-    //     }
-    // }
- 
     // // TODO: error checking for image saving
     // pub fn save_image(&mut self, id: ImageId, path: PathBuf, format: ImageFormat) -> Result<(), ImageManagerError> {
     //     let image = self.get_image(id)?;

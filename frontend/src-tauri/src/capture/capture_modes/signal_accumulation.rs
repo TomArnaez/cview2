@@ -1,7 +1,7 @@
 use std::time::Duration;
 use async_trait::async_trait;
 use wrapper::SLImage;
-use crate::capture::{capture::{CaptureBuilder, CaptureSettings, CaptureStepOutput, JobInitOutput, StatefulCapture}, error::CaptureError};
+use crate::capture::{capture::{CaptureBuilder, CaptureSettings, JobInitOutput, StatefulCapture}, error::CaptureError};
 use super::{sequence::SequenceCapture, CaptureContext};
 
 pub struct SignalAccumulationCapture {

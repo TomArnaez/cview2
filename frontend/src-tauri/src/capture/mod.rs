@@ -6,3 +6,4 @@ mod error;
 mod report;
 
 pub use detector::{DetectorId, DetectorController, DetectorStatus, TsDetector};
+pub use report::CaptureReport;
